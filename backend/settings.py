@@ -40,6 +40,10 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'sudoku_api',
+
+    'rest_framework',
+    'channels',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
@@ -50,7 +54,30 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
+    # cors headers middleware
+    'corsheaders.middleware.CorsMiddleware',
 ]
+
+# Allow CORS from frontend
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",  # React development server
+    # Add your production domain here
+]
+
+# Channels configuration
+ASGI_APPLICATION = "sudoku_project.asgi.application"
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    },
+}
+
+# Frontend URL for QR code generation
+FRONTEND_URL = "http://localhost:3000"  # Change in production
 
 ROOT_URLCONF = 'backend.urls'
 
