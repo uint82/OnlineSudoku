@@ -1,6 +1,11 @@
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from . import views
 
-urlpatterns = {
-    path('', views.home, name="home"),
-}
+router = DefaultRouter()
+router.register(r'games', views.GameViewSet)
+router.register(r'moves', views.MoveViewSet)
+
+urlpatterns = [
+    path('', include(router.urls)),
+]
