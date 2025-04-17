@@ -102,41 +102,10 @@ class MoveViewSet(viewsets.ModelViewSet):
     queryset = Move.objects.all()
     serializer_class = MoveSerializer
     
+    # using serializer level validation and creation methoc
     def create(self, request):
-        game_id = request.data.get('game_id')
-        player_id = request.data.get('player_id')
-        row = request.data.get('row')
-        column = request.data.get('column')
-        value = request.data.get('value')
-        
-        # validate inputs
-        if None in [game_id, player_id, row, column, value]:
-            return Response({'error': 'Missing required fields'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            game = Game.objects.get(id=game_id)
-            player = Player.objects.get(id=player_id, game=game)
-        except (Game.DoesNotExist, Player.DoesNotExist):
-            return Response({'error': 'Game or player not found'}, status=status.HTTP_404_NOT_FOUND)
-        
-        # validate move (check if initial cell was empty)
-        if game.initial_board[row][column] != 0:
-            return Response({'error': 'Cannot modify initial cell'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # update the game board
-        current_board = game.current_board
-        current_board[row][column] = value
-        game.current_board = current_board
-        game.save()
-        
-        # record the move
-        move = Move.objects.create(
-            game=game,
-            player=player,
-            row=row,
-            column=column,
-            value=value
-        )
-        
-        serializer = MoveSerializer(move)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
