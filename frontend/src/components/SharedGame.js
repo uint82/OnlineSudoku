@@ -194,7 +194,12 @@ const SharedGame = () => {
   };
 
   const handleMakeMove = (row, col, value) => {
-    if (!socket || !playerId) return;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      console.log("WebSocket not ready, can't send move");
+      // optionally show an error to the user
+      alert("Connection not ready. Please try again in a moment.");
+      return;
+    }
     
     // send move through websocket
     socket.send(JSON.stringify({
@@ -207,7 +212,7 @@ const SharedGame = () => {
   };
 
   const handleLeaveGame = () => {
-    // Clean up when leaving the game
+    // clean up when leaving the game
     if (socket) {
       socket.close();
     }
