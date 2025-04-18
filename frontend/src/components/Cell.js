@@ -44,9 +44,12 @@ const Cell = ({
   };
 
   return (
-    
+    <div 
+      style={cellStyle} 
+      onClick={handleClick}
+    >
       {value > 0 ? value : ''}
-    
+    </div>
   );
 };
 
