@@ -56,3 +56,31 @@ footer {
     padding: 10px;
   }
 }
+
+.sudoku-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 40px);
+  grid-template-rows: repeat(9, 40px);
+  gap: 0;
+  width: 360px;
+  margin: 0 auto 20px auto;
+  border: 2px solid #333;
+}
+
+.board-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 20px auto;
+}
+
+.number-pad {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+/* Optional: Add hover effect to cells */
+.sudoku-grid > div:not([style*="font-weight: bold"]):hover {
+  background-color: #f8f8f8;
+}
