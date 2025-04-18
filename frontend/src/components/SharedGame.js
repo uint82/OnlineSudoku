@@ -1,0 +1,279 @@
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import Board from './Board';
+import GameControls from './GameControls';
+
+const SharedGame = () => {
+  const { gameId } = useParams();
+  const navigate = useNavigate();
+  const [game, setGame] = useState(null);
+  const [playerName, setPlayerName] = useState('');
+  const [playerColor, setPlayerColor] = useState('#e74c3c');
+  const [playerId, setPlayerId] = useState(null);
+  const [socket, setSocket] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // colors for player selection
+  const colorOptions = [
+    '#e74c3c', '#3498db', '#2ecc71', '#f39c12', 
+    '#9b59b6', '#1abc9c', '#d35400', '#34495e'
+  ];
+
+  useEffect(() => {
+    if (gameId) {
+      fetchGameDetails();
+    }
+  }, [gameId]);
+
+  useEffect(() => {
+    if (playerId && game) {
+      // connect to websocket
+      connectWebSocket();
+    }
+
+    return () => {
+      // clean up websocket connection when component unmounts
+      if (socket) {
+        socket.close();
+      }
+    };
+  }, [playerId, game]);
+
+  const fetchGameDetails = async () => {
+    try {
+      const response = await axios.get(`http://localhost:8000/api/games/${gameId}/`);
+      setGame(response.data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching game:', error);
+      setError('Game not found or has expired');
+      setLoading(false);
+    }
+  };
+
+  const handleJoinGame = async (e) => {
+    e.preventDefault();
+    
+    if (!playerName.trim()) {
+      alert('Please enter your name');
+      return;
+    }
+    
+    try {
+      const response = await axios.post(`http://localhost:8000/api/games/${gameId}/join/`, {
+        player_name: playerName,
+        player_color: playerColor
+      });
+      
+      // set player ID from response
+      setPlayerId(response.data.player_id);
+      
+      // update game data
+      setGame(response.data);
+      
+    } catch (error) {
+      console.error('Error joining game:', error);
+      setError('Failed to join the game');
+    }
+  };
+
+  const connectWebSocket = () => {
+    // change to secure websocket in production
+    const ws = new WebSocket(`ws://localhost:8000/ws/game/${gameId}/`);
+    
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+      
+      // announce player join
+      ws.send(JSON.stringify({
+        type: 'join',
+        player_id: playerId
+      }));
+    };
+    
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      
+      if (data.type === 'move') {
+        // update board with new move
+        handleRemoteMove(data.move);
+      } else if (data.type === 'join') {
+        // handle new player joining
+        handlePlayerJoin(data.player);
+      }
+    };
+    
+    ws.onerror = (e) => {
+      console.error('WebSocket error:', e);
+    };
+    
+    ws.onclose = () => {
+      console.log('WebSocket disconnected');
+    };
+    
+    setSocket(ws);
+  };
+
+  const handleRemoteMove = (move) => {
+    // update game state with the new move
+    setGame(prevGame => {
+      const newBoard = [...prevGame.current_board];
+      newBoard[move.row][move.column] = move.value;
+      
+      const newMoves = [...prevGame.moves, move];
+      
+      return {
+        ...prevGame,
+        current_board: newBoard,
+        moves: newMoves
+      };
+    });
+  };
+
+  const handlePlayerJoin = (player) => {
+    // add new player to the game state
+    setGame(prevGame => {
+      const playerExists = prevGame.players.some(p => p.id === player.id);
+      
+      if (playerExists) {
+        return prevGame;
+      }
+      
+      return {
+        ...prevGame,
+        players: [...prevGame.players, player]
+      };
+    });
+  };
+
+  const handleMakeMove = (row, col, value) => {
+    if (!socket || !playerId) return;
+    
+    // send move through websocket
+    socket.send(JSON.stringify({
+      type: 'move',
+      player_id: playerId,
+      row: row,
+      column: col,
+      value: value
+    }));
+  };
+
+  if (loading) {
+    return <div className="loading">Loading game...</div>;
+  }
+
+  if (error) {
+    return <div className="error">{error}</div>;
+  }
+
+  // if user hasn't joined yet, show join form
+  if (!playerId) {
+    return (
+      <div style={{ maxWidth: '500px', margin: '0 auto', padding: '20px' }}>
+        <h2>Join Sudoku Game</h2>
+        <form onSubmit={handleJoinGame}>
+          <div style={{ marginBottom: '20px' }}>
+            <label htmlFor="playerName" style={{ display: 'block', marginBottom: '5px' }}>
+              Your Name:
+            </label>
+            <input
+              type="text"
+              id="playerName"
+              value={playerName}
+              onChange={(e) => setPlayerName(e.target.value)}
+              style={{ width: '100%', padding: '8px' }}
+              required
+            />
+          </div>
+          
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', marginBottom: '5px' }}>
+              Choose your color:
+            </label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+              {colorOptions.map(color => (
+                <div
+                  key={color}
+                  onClick={() => setPlayerColor(color)}
+                  style={{
+                    width: '30px',
+                    height: '30px',
+                    backgroundColor: color,
+                    borderRadius: '50%',
+                    cursor: 'pointer',
+                    border: color === playerColor ? '2px solid black' : 'none'
+                  }}
+                ></div>
+              ))}
+            </div>
+          </div>
+          
+          <button 
+            type="submit" 
+            style={{
+              backgroundColor: '#4CAF50',
+              color: 'white',
+              padding: '10px 15px',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '16px'
+            }}
+          >
+            Join Game
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  // find current player in players list
+  const currentPlayer = game.players.find(p => p.id === playerId);
+
+  return (
+    <div style={{ textAlign: 'center' }}>
+      <h2>Multiplayer Sudoku</h2>
+      
+      <GameControls 
+        difficulty={game.difficulty} 
+        playerName={currentPlayer?.name || 'Player'} 
+        isHost={currentPlayer?.is_host || false}
+      />
+      
+      {/* Players list */}
+      <div style={{ margin: '20px 0' }}>
+        <h3>Players:</h3>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+          {game.players.map(player => (
+            <div 
+              key={player.id} 
+              style={{ 
+                padding: '5px 10px', 
+                backgroundColor: player.color, 
+                color: '#fff',
+                borderRadius: '5px',
+                fontWeight: player.id === playerId ? 'bold' : 'normal'
+              }}
+            >
+              {player.name} {player.is_host ? '(Host)' : ''}
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      <Board
+        initialBoard={game.initial_board}
+        currentBoard={game.current_board}
+        onMakeMove={handleMakeMove}
+        players={game.players}
+        playerId={playerId}
+        moves={game.moves}
+      />
+    </div>
+  );
+};
+
+export default SharedGame;
