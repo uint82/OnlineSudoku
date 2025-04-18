@@ -64,7 +64,7 @@ const Board = ({
 
   const renderNumberPad = () => {
     return (
-      
+      <div className="number-pad">
         {[1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map(number => (
           <button
             key={number}
@@ -78,15 +78,15 @@ const Board = ({
             }}
           >
             {number === 0 ? 'X' : number}
-          
+          </button>
         ))}
-      
+      </div>
     );
   };
 
   return (
-    
-      
+    <div className="board-container">
+      <div className="sudoku-grid">
         {currentBoard.map((row, rowIndex) =>
           row.map((cell, colIndex) => (
             <Cell
@@ -102,9 +102,9 @@ const Board = ({
             />
           ))
         )}
-      
+      </div>
       {renderNumberPad()}
-    
+    </div>
   );
 };
 
