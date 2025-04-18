@@ -22,10 +22,36 @@ const SharedGame = () => {
   ];
 
   useEffect(() => {
+    // check if user is already part of this game or a different game
+    const savedGameId = localStorage.getItem('gameId');
+    const savedPlayerId = localStorage.getItem('playerId');
+    
+    if (savedGameId && savedPlayerId) {
+      if (savedGameId === gameId) {
+        // user is already part of this game
+        setPlayerId(savedPlayerId);
+      } else {
+        // user is part of another game - confirm before switching
+        const confirmSwitch = window.confirm(
+          "You're already in another game. Do you want to leave that game and join this one?"
+        );
+        
+        if (confirmSwitch) {
+          // clear existing game data
+          localStorage.removeItem('gameId');
+          localStorage.removeItem('playerId');
+        } else {
+          // redirect back to their current game
+          navigate('/');
+          return;
+        }
+      }
+    }
+    
     if (gameId) {
       fetchGameDetails();
     }
-  }, [gameId]);
+  }, [gameId, navigate]);
 
   useEffect(() => {
     if (playerId && game) {
@@ -67,6 +93,10 @@ const SharedGame = () => {
         player_color: playerColor
       });
       
+      // save game data to localStorage
+      localStorage.setItem('gameId', gameId);
+      localStorage.setItem('playerId', response.data.player_id);
+      
       // set player ID from response
       setPlayerId(response.data.player_id);
       
@@ -80,6 +110,11 @@ const SharedGame = () => {
   };
 
   const connectWebSocket = () => {
+    // close existing socket if any
+    if (socket) {
+      socket.close();
+    }
+    
     // change to secure websocket in production
     const ws = new WebSocket(`ws://localhost:8000/ws/game/${gameId}/`);
     
@@ -109,8 +144,14 @@ const SharedGame = () => {
       console.error('WebSocket error:', e);
     };
     
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
+    ws.onclose = (e) => {
+      console.log('WebSocket disconnected', e.reason);
+      // try to reconnect after a delay if we still have game data
+      if (game && playerId) {
+        setTimeout(() => {
+          connectWebSocket();
+        }, 3000);
+      }
     };
     
     setSocket(ws);
@@ -119,10 +160,12 @@ const SharedGame = () => {
   const handleRemoteMove = (move) => {
     // update game state with the new move
     setGame(prevGame => {
+      if (!prevGame) return null;
+      
       const newBoard = [...prevGame.current_board];
       newBoard[move.row][move.column] = move.value;
       
-      const newMoves = [...prevGame.moves, move];
+      const newMoves = [...(prevGame.moves || []), move];
       
       return {
         ...prevGame,
@@ -135,6 +178,8 @@ const SharedGame = () => {
   const handlePlayerJoin = (player) => {
     // add new player to the game state
     setGame(prevGame => {
+      if (!prevGame) return null;
+      
       const playerExists = prevGame.players.some(p => p.id === player.id);
       
       if (playerExists) {
@@ -161,12 +206,40 @@ const SharedGame = () => {
     }));
   };
 
+  const handleLeaveGame = () => {
+    // Clean up when leaving the game
+    if (socket) {
+      socket.close();
+    }
+    localStorage.removeItem('gameId');
+    localStorage.removeItem('playerId');
+    navigate('/');
+  };
+
   if (loading) {
     return <div className="loading">Loading game...</div>;
   }
 
   if (error) {
-    return <div className="error">{error}</div>;
+    return (
+      <div style={{ maxWidth: '500px', margin: '0 auto', padding: '20px', textAlign: 'center' }}>
+        <div className="error">{error}</div>
+        <button
+          onClick={() => navigate('/')}
+          style={{
+            backgroundColor: '#3498db',
+            color: 'white',
+            padding: '10px 15px',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            marginTop: '20px'
+          }}
+        >
+          Go Home
+        </button>
+      </div>
+    );
   }
 
   // if user hasn't joined yet, show join form
@@ -270,8 +343,24 @@ const SharedGame = () => {
         onMakeMove={handleMakeMove}
         players={game.players}
         playerId={playerId}
-        moves={game.moves}
+        moves={game.moves || []}
       />
+      
+      <div style={{ marginTop: '20px' }}>
+        <button 
+          onClick={handleLeaveGame} 
+          style={{
+            backgroundColor: '#e74c3c',
+            color: 'white',
+            padding: '8px 15px',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          Leave Game
+        </button>
+      </div>
     </div>
   );
 };

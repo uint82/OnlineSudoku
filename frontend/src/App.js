@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, Link, Navigate } from 'react-router-dom';
 import axios from 'axios';
 import Board from './components/Board';
@@ -14,6 +14,37 @@ const App = () => {
   const [difficulty, setDifficulty] = useState('medium');
   const [showForm, setShowForm] = useState(true);
   const [socket, setSocket] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // check for saved game data when component mounts
+  useEffect(() => {
+    const savedGameId = localStorage.getItem('gameId');
+    const savedPlayerId = localStorage.getItem('playerId');
+    
+    if (savedGameId && savedPlayerId) {
+      fetchSavedGame(savedGameId, savedPlayerId);
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  // fetch saved game from API
+  const fetchSavedGame = async (gameId, playerId) => {
+    try {
+      const response = await axios.get(`http://localhost:8000/api/games/${gameId}/`);
+      setGame(response.data);
+      setPlayerId(playerId);
+      setShowForm(false);
+      connectWebSocket(gameId, playerId);
+    } catch (error) {
+      console.error('Error fetching saved game:', error);
+      // clear saved game data if it's invalid
+      localStorage.removeItem('gameId');
+      localStorage.removeItem('playerId');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCreateGame = async (e) => {
     e.preventDefault();
@@ -29,6 +60,10 @@ const App = () => {
         player_name: playerName,
       });
       
+      // save game info to localStorage
+      localStorage.setItem('gameId', response.data.id);
+      localStorage.setItem('playerId', response.data.player_id);
+      
       setGame(response.data);
       setPlayerId(response.data.player_id);
       setShowForm(false);
@@ -43,11 +78,21 @@ const App = () => {
   };
 
   const connectWebSocket = (gameId, playerId) => {
+    // close existing socket if any
+    if (socket) {
+      socket.close();
+    }
+    
     // change to secure webSocket in production
     const ws = new WebSocket(`ws://localhost:8000/ws/game/${gameId}/`);
     
     ws.onopen = () => {
       console.log('WebSocket connected');
+      // announce join when connecting
+      ws.send(JSON.stringify({
+        type: 'join',
+        player_id: playerId
+      }));
     };
     
     ws.onmessage = (e) => {
@@ -66,8 +111,14 @@ const App = () => {
       console.error('WebSocket error:', e);
     };
     
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
+    ws.onclose = (e) => {
+      console.log('WebSocket disconnected', e.reason);
+      // try to reconnect after a delay
+      if (game && playerId) {
+        setTimeout(() => {
+          connectWebSocket(gameId, playerId);
+        }, 3000);
+      }
     };
     
     setSocket(ws);
@@ -76,10 +127,12 @@ const App = () => {
   const handleRemoteMove = (move) => {
     // update game state with the new move
     setGame(prevGame => {
+      if (!prevGame) return null;
+      
       const newBoard = [...prevGame.current_board];
       newBoard[move.row][move.column] = move.value;
       
-      const newMoves = [...prevGame.moves, move];
+      const newMoves = [...(prevGame.moves || []), move];
       
       return {
         ...prevGame,
@@ -92,6 +145,8 @@ const App = () => {
   const handlePlayerJoin = (player) => {
     // add new player to the game state
     setGame(prevGame => {
+      if (!prevGame) return null;
+      
       const playerExists = prevGame.players.some(p => p.id === player.id);
       
       if (playerExists) {
@@ -116,6 +171,18 @@ const App = () => {
       column: col,
       value: value
     }));
+  };
+
+  const handleLeaveGame = () => {
+    // clean up when leaving the game
+    if (socket) {
+      socket.close();
+    }
+    localStorage.removeItem('gameId');
+    localStorage.removeItem('playerId');
+    setGame(null);
+    setPlayerId(null);
+    setShowForm(true);
   };
 
   // create Game Form
@@ -173,6 +240,10 @@ const App = () => {
 
   // home component - create Game or render board
   const Home = () => {
+    if (loading) {
+      return <div>Loading your game...</div>;
+    }
+    
     if (showForm) {
       return renderCreateGameForm();
     }
@@ -225,6 +296,22 @@ const App = () => {
         />
         
         <Invite gameId={game.id} />
+        
+        <div style={{ marginTop: '20px' }}>
+          <button 
+            onClick={handleLeaveGame} 
+            style={{
+              backgroundColor: '#e74c3c',
+              color: 'white',
+              padding: '8px 15px',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+          >
+            Leave Game
+          </button>
+        </div>
       </div>
     );
   };
