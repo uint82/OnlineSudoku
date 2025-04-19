@@ -25,20 +25,22 @@ const Board = ({
   };
 
   const handleCellClick = (row, col) => {
-    // If clicking on a cell with a number, toggle highlighting
+    // if clicking on a cell with a number, toggle highlighting
     if (currentBoard[row][col] !== 0) {
       if (highlightedNumber === currentBoard[row][col]) {
-        // If already highlighted, turn off highlighting
+        // if already highlighted, turn off highlighting
         setHighlightedNumber(null);
       } else {
-        // Otherwise, highlight this number
+        // otherwise, highlight this number
         setHighlightedNumber(currentBoard[row][col]);
       }
-    }
-    
-    // only set selectedcell for editable cells
-    if (initialBoard[row][col] === 0) {
+      
+      // clear selected cell when clicking on a numbered cell
+      setSelectedCell(null);
+    } else {
+      // for empty cells, set as selected and clear number highlighting
       setSelectedCell({ row, col });
+      setHighlightedNumber(null);
     }
   };
 
@@ -77,6 +79,8 @@ const Board = ({
       setHighlightedNumber(null);
     } else {
       setHighlightedNumber(number);
+      // Clear selected cell when highlighting a number
+      setSelectedCell(null);
     }
   };
 

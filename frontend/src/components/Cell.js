@@ -19,7 +19,9 @@ const Cell = ({
     justifyContent: 'center',
     border: '1px solid #ccc',
     fontWeight: isInitial ? 'bold' : 'normal',
-    backgroundColor: hasError ? '#ffcccc' : isHighlighted ? '#6FA6CD' : isSelected ? '#f0f0f0' : 'white',
+    backgroundColor: hasError ? '#ffcccc' : 
+                   isSelected ? '#6FA6CD' :  // empty cell highlight color
+                   isHighlighted ? '#6FA6CD' : 'white',
     cursor: isInitial ? 'default' : 'pointer',
     color: hasError ? 'red' : (isInitial ? 'black' : playerColor || '#666'),
     transition: 'background-color 0.2s'
