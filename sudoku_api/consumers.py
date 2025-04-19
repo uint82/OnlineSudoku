@@ -2,11 +2,13 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from .models import Game, Player, Move
+import asyncio
 
 class SudokuConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.game_id = self.scope['url_route']['kwargs']['game_id']
         self.room_group_name = f'game_{self.game_id}'
+        self.heartbeat_task = None
        
         # join room group
         await self.channel_layer.group_add(
@@ -15,13 +17,40 @@ class SudokuConsumer(AsyncWebsocketConsumer):
         )
 
         await self.accept()
+        
+        # start heartbeat task
+        self.heartbeat_task = asyncio.create_task(self.send_heartbeat())
     
     async def disconnect(self, close_code):
+        # cancel heartbeat task
+        if self.heartbeat_task:
+            self.heartbeat_task.cancel()
+            
         # leave room group
         await self.channel_layer.group_discard(
             self.room_group_name,
             self.channel_name
         )
+    
+    async def send_heartbeat(self):
+        """Send periodic heartbeat to keep connection alive"""
+        try:
+            while True:
+                await asyncio.sleep(30)  # Send heartbeat every 30 seconds
+                await self.send(text_data=json.dumps({
+                    'type': 'heartbeat',
+                    'timestamp': self.get_timestamp()
+                }))
+        except asyncio.CancelledError:
+            # task was cancelled, clean up
+            pass
+        except Exception as e:
+            print(f"Heartbeat error: {e}")
+    
+    def get_timestamp(self):
+        """Return current ISO timestamp for the heartbeat"""
+        from datetime import datetime
+        return datetime.now().isoformat()
     
     async def receive(self, text_data):
         data = json.loads(text_data)
@@ -51,7 +80,7 @@ class SudokuConsumer(AsyncWebsocketConsumer):
             player_id = data.get('player_id')
             player_data = await self.get_player_data(player_id)
             
-            #bBroadcast join to group
+            # broadcast join to group
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
@@ -59,6 +88,10 @@ class SudokuConsumer(AsyncWebsocketConsumer):
                     'player': player_data
                 }
             )
+        
+        elif message_type == 'pong':
+            # client responded to heartbeat, connection is still alive
+            pass
     
     async def broadcast_move(self, event):
         move = event['move']

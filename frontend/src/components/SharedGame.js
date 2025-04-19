@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Board from './Board';
 import GameControls from './GameControls';
+import { setupWebSocketWithHeartbeat } from '../utils/websocketUtils';
 
 const SharedGame = () => {
   const { gameId } = useParams();
@@ -12,8 +13,12 @@ const SharedGame = () => {
   const [playerColor, setPlayerColor] = useState('#e74c3c');
   const [playerId, setPlayerId] = useState(null);
   const [socket, setSocket] = useState(null);
+  const [socketCleanup, setSocketCleanup] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [connectionStatus, setConnectionStatus] = useState('disconnected');
+  const [socketState, setSocketState] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   // colors for player selection
   const colorOptions = [
@@ -51,6 +56,13 @@ const SharedGame = () => {
     if (gameId) {
       fetchGameDetails();
     }
+    
+    // clean up socket on unmount
+    return () => {
+      if (socketCleanup) {
+        socketCleanup();
+      }
+    };
   }, [gameId, navigate]);
 
   useEffect(() => {
@@ -58,13 +70,6 @@ const SharedGame = () => {
       // connect to websocket
       connectWebSocket();
     }
-
-    return () => {
-      // clean up websocket connection when component unmounts
-      if (socket) {
-        socket.close();
-      }
-    };
   }, [playerId, game]);
 
   const fetchGameDetails = async () => {
@@ -110,26 +115,29 @@ const SharedGame = () => {
   };
 
   const connectWebSocket = () => {
-    // close existing socket if any
-    if (socket) {
-      socket.close();
+    // clean up existing socket if any
+    if (socketCleanup) {
+      socketCleanup();
     }
     
     // change to secure websocket in production
-    const ws = new WebSocket(`ws://localhost:8000/ws/game/${gameId}/`);
+    const websocketUrl = `ws://localhost:8000/ws/game/${gameId}/`;
     
-    ws.onopen = () => {
-      console.log('WebSocket connected');
-      
-      // announce player join
-      ws.send(JSON.stringify({
-        type: 'join',
-        player_id: playerId
-      }));
+    const onOpen = () => {
+      setConnectionStatus('connected');
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        // announce player join
+        socket.send(JSON.stringify({
+          type: 'join',
+          player_id: playerId
+        }));
+      }
     };
-    
-    ws.onmessage = (e) => {
+    const onMessage = (e) => {
       const data = JSON.parse(e.data);
+      
+      // skip heartbeat messages as they're handled in the utility
+      if (data.type === 'heartbeat') return;
       
       if (data.type === 'move') {
         // update board with new move
@@ -140,23 +148,37 @@ const SharedGame = () => {
       }
     };
     
-    ws.onerror = (e) => {
+    const onError = (e) => {
       console.error('WebSocket error:', e);
+      setConnectionStatus('error');
     };
     
-    ws.onclose = (e) => {
+    const onClose = (e) => {
       console.log('WebSocket disconnected', e.reason);
-      // try to reconnect after a delay if we still have game data
-      if (game && playerId) {
-        setTimeout(() => {
-          connectWebSocket();
-        }, 3000);
-      }
+      setConnectionStatus('disconnected');
     };
-    
-    setSocket(ws);
-  };
 
+    // set up the websocket with heartbeat
+    const { socket: ws, cleanup, isReady, getConnectionState, sendMessage, reconnect } = setupWebSocketWithHeartbeat(
+      websocketUrl,
+      onOpen,
+      onMessage,
+      onError,
+      onClose
+    );
+
+    // set all these values separately
+    setSocket(ws);
+    setSocketCleanup(() => cleanup);
+    
+    // store all utility functions in socketState
+    setSocketState({
+      isReady,
+      getConnectionState,
+      sendMessage,
+      reconnect
+    });
+  };
   const handleRemoteMove = (move) => {
     // update game state with the new move
     setGame(prevGame => {
@@ -194,27 +216,43 @@ const SharedGame = () => {
   };
 
   const handleMakeMove = (row, col, value) => {
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      console.log("WebSocket not ready, can't send move");
-      // optionally show an error to the user
-      alert("Connection not ready. Please try again in a moment.");
-      return;
-    }
+    // instead of checking if socket is ready, use the sendMessage function
+    // which will queue messages if connection isn't ready
     
-    // send move through websocket
-    socket.send(JSON.stringify({
+    // create the move message
+    const moveMessage = JSON.stringify({
       type: 'move',
       player_id: playerId,
       row: row,
       column: col,
       value: value
-    }));
+    });
+    
+    // use enhanced sendMessage function that handles queuing
+    const messageSent = socketState && socketState.sendMessage(moveMessage);
+    
+    // if connection is down but message was queued, show a less intrusive notification
+    if (!messageSent) {
+      // only show the message if there isn't already one displayed
+      if (!errorMessage) {
+        setErrorMessage("Move queued - reconnecting...");
+        
+        // auto-hide the error after 1.5 seconds
+        setTimeout(() => setErrorMessage(null), 1500);
+      }
+      return;
+    }
+    
+    // clear any previous error if message was sent successfully
+    if (errorMessage) {
+      setErrorMessage(null);
+    }
   };
 
   const handleLeaveGame = () => {
     // clean up when leaving the game
-    if (socket) {
-      socket.close();
+    if (socketCleanup) {
+      socketCleanup();
     }
     localStorage.removeItem('gameId');
     localStorage.removeItem('playerId');
@@ -315,6 +353,21 @@ const SharedGame = () => {
     <div style={{ textAlign: 'center' }}>
       <h2>Multiplayer Sudoku</h2>
       
+      {/* Connection status indicator */}
+      <div 
+        style={{ 
+          display: 'inline-block',
+          margin: '10px 0',
+          padding: '5px 10px',
+          borderRadius: '5px',
+          backgroundColor: connectionStatus === 'connected' ? '#2ecc71' : connectionStatus === 'disconnected' ? '#e74c3c' : '#f39c12',
+          color: 'white',
+          fontSize: '14px'
+        }}
+      >
+        {connectionStatus === 'connected' ? 'Connected' : connectionStatus === 'disconnected' ? 'Reconnecting...' : 'Connection Error'}
+      </div>
+      
       <GameControls 
         difficulty={game.difficulty} 
         playerName={currentPlayer?.name || 'Player'} 
@@ -342,6 +395,19 @@ const SharedGame = () => {
         </div>
       </div>
       
+      {/* Add error message display here */}
+      {errorMessage && (
+        <div style={{ 
+          margin: '10px 0', 
+          padding: '10px', 
+          backgroundColor: '#f8d7da',
+          color: '#721c24',
+          borderRadius: '4px'
+        }}>
+          {errorMessage}
+        </div>
+      )}
+
       <Board
         initialBoard={game.initial_board}
         currentBoard={game.current_board}

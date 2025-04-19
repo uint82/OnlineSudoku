@@ -5,6 +5,7 @@ import Board from './components/Board';
 import Invite from './components/Invite';
 import GameControls from './components/GameControls';
 import SharedGame from './components/SharedGame';
+import { setupWebSocketWithHeartbeat } from './utils/websocketUtils';
 import './App.css';
 
 const App = () => {
@@ -14,7 +15,11 @@ const App = () => {
   const [difficulty, setDifficulty] = useState('medium');
   const [showForm, setShowForm] = useState(true);
   const [socket, setSocket] = useState(null);
+  const [socketCleanup, setSocketCleanup] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [socketState, setSocketState] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+
 
   // check for saved game data when component mounts
   useEffect(() => {
@@ -26,6 +31,13 @@ const App = () => {
     } else {
       setLoading(false);
     }
+    
+    // clean up socket on unmount
+    return () => {
+      if (socketCleanup) {
+        socketCleanup();
+      }
+    };
   }, []);
 
   // fetch saved game from API
@@ -78,25 +90,29 @@ const App = () => {
   };
 
   const connectWebSocket = (gameId, playerId) => {
-    // close existing socket if any
-    if (socket) {
-      socket.close();
+    // clean up existing socket if any
+    if (socketCleanup) {
+      socketCleanup();
     }
     
     // change to secure webSocket in production
-    const ws = new WebSocket(`ws://localhost:8000/ws/game/${gameId}/`);
+    const websocketUrl = `ws://localhost:8000/ws/game/${gameId}/`;
     
-    ws.onopen = () => {
-      console.log('WebSocket connected');
-      // announce join when connecting
-      ws.send(JSON.stringify({
-        type: 'join',
-        player_id: playerId
-      }));
+    const onOpen = () => {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        // announce join when connecting
+        socket.send(JSON.stringify({
+          type: 'join',
+          player_id: playerId
+        }));
+      }
     };
     
-    ws.onmessage = (e) => {
+    const onMessage = (e) => {
       const data = JSON.parse(e.data);
+      
+      // skip heartbeat messages as they're handled in the utility
+      if (data.type === 'heartbeat') return;
       
       if (data.type === 'move') {
         // update board with new move
@@ -107,13 +123,13 @@ const App = () => {
       }
     };
     
-    ws.onerror = (e) => {
+    const onError = (e) => {
       console.error('WebSocket error:', e);
     };
     
-    ws.onclose = (e) => {
+    const onClose = (e) => {
       console.log('WebSocket disconnected', e.reason);
-      // try to reconnect after a delay
+      // auto-reconnect after a delay
       if (game && playerId) {
         setTimeout(() => {
           connectWebSocket(gameId, playerId);
@@ -121,7 +137,17 @@ const App = () => {
       }
     };
     
+    const { socket: ws, cleanup, isReady, getConnectionState } = setupWebSocketWithHeartbeat(
+      websocketUrl,
+      onOpen,
+      onMessage,
+      onError,
+      onClose
+    );
+    
     setSocket(ws);
+    setSocketCleanup(() => cleanup);
+    setSocketState({ isReady, getConnectionState });
   };
 
   const handleRemoteMove = (move) => {
@@ -161,12 +187,19 @@ const App = () => {
   };
 
   const handleMakeMove = (row, col, value) => {
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
+    const isReady = socketState && socketState.isReady();
+
+    if (!isReady) {
       console.log("WebSocket not ready, can't send move");
-      // optionally show an error to the user
-      alert("Connection not ready. Please try again in a moment.");
+      setErrorMessage("Connection not ready. Please wait a moment...");
+      
+      // auto-hide the error after 3 seconds
+      setTimeout(() => setErrorMessage(null), 3000);
       return;
     }
+    
+    // clear any previous error
+    setErrorMessage(null);
     
     // send move through websocket
     socket.send(JSON.stringify({
@@ -180,8 +213,8 @@ const App = () => {
 
   const handleLeaveGame = () => {
     // clean up when leaving the game
-    if (socket) {
-      socket.close();
+    if (socketCleanup) {
+      socketCleanup();
     }
     localStorage.removeItem('gameId');
     localStorage.removeItem('playerId');
