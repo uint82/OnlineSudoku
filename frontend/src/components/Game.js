@@ -2,16 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Board from './Board';
+import Invite from './Invite';
 import GameControls from './GameControls';
 import { setupWebSocketWithHeartbeat } from '../utils/websocketUtils';
 
-const SharedGame = () => {
-  const { gameId } = useParams();
+const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
+  const params = useParams();
   const navigate = useNavigate();
+  
+  // use URL parameter if provided, otherwise use prop
+  const gameId = params.gameId || gameIdProp;
+  
   const [game, setGame] = useState(null);
-  const [playerName, setPlayerName] = useState('');
-  const [playerColor, setPlayerColor] = useState('#e74c3c');
-  const [playerId, setPlayerId] = useState(null);
+  const [playerId, setPlayerId] = useState(playerIdProp || null);
   const [socket, setSocket] = useState(null);
   const [socketCleanup, setSocketCleanup] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -19,6 +22,10 @@ const SharedGame = () => {
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
   const [socketState, setSocketState] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+  
+  // join form
+  const [playerName, setPlayerName] = useState('');
+  const [playerColor, setPlayerColor] = useState('#e74c3c');
 
   // colors for player selection
   const colorOptions = [
@@ -33,7 +40,7 @@ const SharedGame = () => {
     
     if (savedGameId && savedPlayerId) {
       if (savedGameId === gameId) {
-        // user is already part of this game
+        // if user is already part of this game
         setPlayerId(savedPlayerId);
       } else {
         // user is part of another game - confirm before switching
@@ -69,8 +76,34 @@ const SharedGame = () => {
     if (playerId && game) {
       // connect to websocket
       connectWebSocket();
+      
+      // set up a polling interval for player list updates
+      // this serves as a backup in case WebSocket messages are missed
+      const playerListInterval = setInterval(() => {
+        if (socketState && socketState.isReady()) {
+          socketState.sendMessage(JSON.stringify({
+            type: 'request_player_list'
+          }));
+        }
+      }, 5000); // check every 5 seconds
+      
+      return () => {
+        clearInterval(playerListInterval);
+      };
     }
   }, [playerId, game]);
+
+  useEffect(() => {
+    // if connection status changes to disconnected, attempt to reconnect
+    if (connectionStatus === 'disconnected' && socketState && socketState.reconnect) {
+      const reconnectTimer = setTimeout(() => {
+        console.log('Attempting to reconnect...');
+        socketState.reconnect();
+      }, 2000); // reconnect after 2 seconds
+      
+      return () => clearTimeout(reconnectTimer);
+    }
+  }, [connectionStatus, socketState]);
 
   const fetchGameDetails = async () => {
     try {
@@ -88,7 +121,7 @@ const SharedGame = () => {
     e.preventDefault();
     
     if (!playerName.trim()) {
-      alert('Please enter your name');
+      setErrorMessage('Please enter your name');
       return;
     }
     
@@ -110,7 +143,7 @@ const SharedGame = () => {
       
     } catch (error) {
       console.error('Error joining game:', error);
-      setError('Failed to join the game');
+      setErrorMessage('Failed to join the game');
     }
   };
 
@@ -125,29 +158,50 @@ const SharedGame = () => {
     
     const onOpen = () => {
       setConnectionStatus('connected');
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        // announce player join
-        socket.send(JSON.stringify({
-          type: 'join',
-          player_id: playerId
-        }));
-      }
+      setTimeout(() => {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          console.log('Announcing player join:', playerId);
+          socket.send(JSON.stringify({
+            type: 'join',
+            player_id: playerId
+          }));
+          
+          // request a fresh player list
+          socket.send(JSON.stringify({
+            type: 'request_player_list'
+          }));
+        }
+      }, 500);
     };
+
     const onMessage = (e) => {
       const data = JSON.parse(e.data);
       
       // skip heartbeat messages as they're handled in the utility
       if (data.type === 'heartbeat') return;
+
+      console.log('WebSocket message received:', data); // For debugging
       
       if (data.type === 'move') {
         // update board with new move
         handleRemoteMove(data.move);
       } else if (data.type === 'join') {
-        // handle new player joining
+        // Handle new player joining
         handlePlayerJoin(data.player);
+        
+        // when we receive a join message, also request a fresh player list
+        // ensures that our player list stays in sync
+        if (socketState && socketState.isReady()) {
+          socketState.sendMessage(JSON.stringify({
+            type: 'request_player_list'
+          }));
+        }
+      } else if (data.type === 'player_list_update') {
+        // handle complete player list update
+        updatePlayerList(data.players);
       }
     };
-    
+
     const onError = (e) => {
       console.error('WebSocket error:', e);
       setConnectionStatus('error');
@@ -179,6 +233,7 @@ const SharedGame = () => {
       reconnect
     });
   };
+
   const handleRemoteMove = (move) => {
     // update game state with the new move
     setGame(prevGame => {
@@ -207,16 +262,42 @@ const SharedGame = () => {
       if (playerExists) {
         return prevGame;
       }
-      
+
       return {
         ...prevGame,
         players: [...prevGame.players, player]
       };
     });
+
+    // log player join for debugging
+    console.log(`Player joined: ${player.name}`);
+  };
+
+  const updatePlayerList = (players) => {
+    console.log('Updating player list with:', players);
+    
+    // use a more reliable state update approach
+    setGame(prevGame => {
+      if (!prevGame) return null;
+      
+      // deep comparison to check if player list has changed
+      const currentPlayers = JSON.stringify(prevGame.players.map(p => p.id).sort());
+      const newPlayers = JSON.stringify(players.map(p => p.id).sort());
+      
+      if (currentPlayers !== newPlayers) {
+        console.log('Player list changed, updating state');
+        return {
+          ...prevGame,
+          players: players
+        };
+      }
+      
+      return prevGame;
+    });
   };
 
   const handleMakeMove = (row, col, value) => {
-    // instead of checking if socket is ready, use the sendMessage function
+    // instead of checking if socket is ready, we gon use the sendMessage function
     // which will queue messages if connection isn't ready
     
     // create the move message
@@ -256,7 +337,13 @@ const SharedGame = () => {
     }
     localStorage.removeItem('gameId');
     localStorage.removeItem('playerId');
-    navigate('/');
+    
+    // use provided callback if available, otherwise navigate home
+    if (onLeaveGame) {
+      onLeaveGame();
+    } else {
+      navigate('/');
+    }
   };
 
   if (loading) {
@@ -347,7 +434,7 @@ const SharedGame = () => {
   }
 
   // find current player in players list
-  const currentPlayer = game.players.find(p => p.id === playerId);
+  const currentPlayer = game.players.find(p => p.id === playerId) || {};
 
   return (
     <div style={{ textAlign: 'center' }}>
@@ -370,20 +457,20 @@ const SharedGame = () => {
       
       <GameControls 
         difficulty={game.difficulty} 
-        playerName={currentPlayer?.name || 'Player'} 
-        isHost={currentPlayer?.is_host || false}
+        playerName={currentPlayer.name || 'Player'} 
+        isHost={currentPlayer.is_host || false}
       />
       
       {/* Players list */}
       <div style={{ margin: '20px 0' }}>
         <h3>Players:</h3>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap' }}>
           {game.players.map(player => (
             <div 
               key={player.id} 
               style={{ 
                 padding: '5px 10px', 
-                backgroundColor: player.color, 
+                backgroundColor: player.color || '#3498db', 
                 color: '#fff',
                 borderRadius: '5px',
                 fontWeight: player.id === playerId ? 'bold' : 'normal'
@@ -395,7 +482,7 @@ const SharedGame = () => {
         </div>
       </div>
       
-      {/* Add error message display here */}
+      {/* Error message display */}
       {errorMessage && (
         <div style={{ 
           margin: '10px 0', 
@@ -417,6 +504,9 @@ const SharedGame = () => {
         moves={game.moves || []}
       />
       
+      {/* Always show the invite link */}
+      <Invite gameId={game.id} />
+      
       <div style={{ marginTop: '20px' }}>
         <button 
           onClick={handleLeaveGame} 
@@ -436,4 +526,4 @@ const SharedGame = () => {
   );
 };
 
-export default SharedGame;
+export default Game;

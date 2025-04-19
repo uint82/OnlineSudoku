@@ -1,8 +1,46 @@
 import random
 import copy
+import qrcode
+from io import BytesIO
+import base64
+
+def generate_qr_code(data):
+    """
+    Generate a QR code as a base64 encoded string
+    
+    Args:
+        data (str): The data to encode in the QR code
+        
+    Returns:
+        str: Base64 encoded PNG image
+    """
+    # Generate QR code
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(data)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    # convert image to base64
+    buffer = BytesIO()
+    img.save(buffer, format="PNG")
+    return base64.b64encode(buffer.getvalue()).decode('utf-8')
 
 def generate_sudoku(difficulty='medium'):
-    """Generate a Sudoku puzzle and the solution."""
+    """
+    Generate a Sudoku puzzle with solution
+    
+    Args:
+        difficulty (str): 'easy', 'medium', or 'hard'
+        
+    Returns:
+        dict: Contains 'puzzle' and 'solution' as 9x9 grids
+    """
     # generate an empty 9x9 grid
     grid = [[0 for _ in range(9)] for _ in range(9)]
     
