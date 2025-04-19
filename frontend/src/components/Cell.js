@@ -6,6 +6,7 @@ const Cell = ({
   col, 
   isInitial, 
   isSelected, 
+  isHighlighted,
   onCellClick, 
   playerColor,
   hasError 
@@ -18,12 +19,13 @@ const Cell = ({
     justifyContent: 'center',
     border: '1px solid #ccc',
     fontWeight: isInitial ? 'bold' : 'normal',
-    backgroundColor: isSelected ? '#f0f0f0' : 'white',
+    backgroundColor: hasError ? '#ffcccc' : isHighlighted ? '#6FA6CD' : isSelected ? '#f0f0f0' : 'white',
     cursor: isInitial ? 'default' : 'pointer',
     color: hasError ? 'red' : (isInitial ? 'black' : playerColor || '#666'),
+    transition: 'background-color 0.2s'
   };
 
-  // Add border styling to create the 3x3 boxes
+  // add border styling to create the 3x3 boxes
   if (row % 3 === 0) {
     cellStyle.borderTop = '2px solid #333';
   }
@@ -38,9 +40,8 @@ const Cell = ({
   }
 
   const handleClick = () => {
-    if (!isInitial) {
-      onCellClick(row, col);
-    }
+    // allow clicking on any cell for highlighting, but only edit non-initial cells
+    onCellClick(row, col);
   };
 
   return (
