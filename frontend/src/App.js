@@ -11,9 +11,9 @@ const App = () => {
     playerId: null
   });
 
-  // Check for saved game data when component mounts
+  // check for saved game data when component mounts
   useEffect(() => {
-    // Move localStorage access to useEffect to avoid doing it during render
+    // move localStorage access to useEffect to avoid doing it during render
     const savedGameId = localStorage.getItem('gameId');
     const savedPlayerId = localStorage.getItem('playerId');
     
@@ -24,17 +24,17 @@ const App = () => {
     setLoading(false);
   }, []);
 
-  // Clean handler using React Router navigation
+  
   const handleLeaveGame = () => {
-    // Clear localStorage
+    
     localStorage.removeItem('gameId');
     localStorage.removeItem('playerId');
     
-    // Update state to trigger re-render
+    
     setGameData({ gameId: null, playerId: null });
   };
 
-  // Component for the root route with access to navigate
+  
   const GameRouteContent = () => {
     if (loading) {
       return <div className="loading">Loading...</div>;
