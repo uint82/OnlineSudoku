@@ -28,17 +28,18 @@ const Board = ({
     
     // mark cells as errors only if their latest move is incorrect
     Object.values(latestMoves).forEach(move => {
+      const cellKey = `${move.row}-${move.column}`;
+      
+      // check if the cell is empty in the current board (value = 0)
+      const [row, col] = cellKey.split('-').map(Number);
+      const isEmpty = currentBoard[row][col] === 0;
+      
       if (move.hasOwnProperty('is_correct') && move.is_correct === false) {
-        const cellKey = `${move.row}-${move.column}`;
-        errorCells[cellKey] = true;
-      }
-    });
-    
-    // check for cleared cells (value = 0)
-    Object.keys(errorCells).forEach(key => {
-      const [row, col] = key.split('-').map(Number);
-      if (currentBoard[row][col] === 0) {
-        delete errorCells[key];
+        // only mark as error if the cell still has a value
+        errorCells[cellKey] = !isEmpty;
+      } else if (move.hasOwnProperty('is_correct') && move.is_correct === true) {
+        // explicitly mark correct cells to ensure they're not in error state
+        errorCells[cellKey] = false;
       }
     });
     
@@ -50,7 +51,7 @@ const Board = ({
   // find player color and correctness status from the moves list
   const getCellData = (cellRow, cellCol) => {
     const cellKey = `${cellRow}-${cellCol}`;
-    const hasError = errorCells[cellKey];
+    const isError = errorCells[cellKey] === true;
     
     // get the most recent move for this cell
     const move = moves?.filter(m => m.row === cellRow && m.column === cellCol)
@@ -59,15 +60,17 @@ const Board = ({
     if (move) {
       const player = players.find(p => p.id === move.player?.id || move.player_id);
       
-      // important: Check if the current value matches the solution (is now correct)
-      // this allows us to display fixed errors as correct
-      const isCurrentlyCorrect = move.is_correct === true;
+      // A cell is correct if:
+      // 1. The most recent move is marked as correct, OR
+      // 2. The cell has a value and is not marked as an error
+      const isCurrentlyCorrect = move.is_correct === true || 
+                                (currentBoard[cellRow][cellCol] !== 0 && !isError);
       
       return {
         color: player ? player.color : '#666',
         isCorrect: isCurrentlyCorrect,
         playerId: move.player?.id || move.player_id,
-        hasError: hasError
+        hasError: isError
       };
     }
     return { color: '#666', isCorrect: null, playerId: null, hasError: false };
