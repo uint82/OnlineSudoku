@@ -4,7 +4,9 @@ import axios from 'axios';
 import Board from './Board';
 import Invite from './Invite';
 import GameControls from './GameControls';
+import CongratulationsPopup from './Popup';
 import { setupWebSocketWithHeartbeat } from '../utils/websocketUtils';
+import { isBoardComplete } from '../utils/sudokuUtils';
 
 const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
   const params = useParams();
@@ -22,6 +24,8 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
   const [socketState, setSocketState] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [showCongratulations, setShowCongratulations] = useState(false);
+  const [completionAcknowledged, setCompletionAcknowledged] = useState(false);
   
   // join form
   const [playerName, setPlayerName] = useState('');
@@ -59,6 +63,10 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
         }
       }
     }
+    const hasAcknowledged = localStorage.getItem(`game_${gameId}_completed_acknowledged`) === 'true';
+    if (hasAcknowledged) {
+      setCompletionAcknowledged(true);
+    }
     
     if (gameId) {
       fetchGameDetails();
@@ -92,6 +100,35 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
       };
     }
   }, [playerId, game]);
+
+  // check for game completion
+  useEffect(() => {
+    if (game && game.current_board && !completionAcknowledged) {
+      const isComplete = isBoardComplete(game.current_board);
+      
+      if (isComplete && !showCongratulations) {
+        console.log('Game completed! Showing congratulations and notifying others.');
+        
+        // show congratulations popup locally
+        setShowCongratulations(true);
+        
+        // notify other players via WebSocket
+        if (socketState && socketState.isReady()) {
+          socketState.sendMessage(JSON.stringify({
+            type: 'game_complete',
+            player_id: playerId
+          }));
+        }
+      }
+    }
+  }, [game?.current_board, showCongratulations, socketState, playerId, completionAcknowledged]);
+
+  // congrat effect
+  useEffect(() => {
+    if (game && game.is_complete && !showCongratulations && !completionAcknowledged) {
+      setShowCongratulations(true);
+    }
+  }, [game?.is_complete, completionAcknowledged]);
 
   useEffect(() => {
     // if connection status changes to disconnected, attempt to reconnect
@@ -199,8 +236,11 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
       } else if (data.type === 'player_list_update') {
         // handle complete player list update
         updatePlayerList(data.players);
+      } else if (data.type === 'game_complete') {
+        // show congratulations popup when another player completes the game
+        setShowCongratulations(true);
       } else if (data.type === 'error') {
-        // Display error messages from the server
+        // display error messages from the server
         setErrorMessage(data.message);
         setTimeout(() => setErrorMessage(null), 3000);
       }
@@ -239,6 +279,11 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
   };
 
   const handleRemoteMove = (move) => {
+    const enhancedMove = {
+      ...move,
+      player_id: move.player_id || (move.players && Object.keys(move.players)[0]) || null
+    };
+    
     // update game state with the new move
     setGame(prevGame => {
       if (!prevGame) return null;
@@ -246,7 +291,8 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
       const newBoard = [...prevGame.current_board];
       newBoard[move.row][move.column] = move.value;
       
-      const newMoves = [...(prevGame.moves || []), move];
+      // Use the enhanced move with player_id
+      const newMoves = [...(prevGame.moves || []), enhancedMove];
       
       return {
         ...prevGame,
@@ -347,6 +393,12 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
     } else {
       navigate('/');
     }
+  };
+
+  const handleCloseCongratulations = () => {
+    setShowCongratulations(false);
+    setCompletionAcknowledged(true);
+    localStorage.setItem(`game_${gameId}_completed_acknowledged`, 'true');
   };
 
   if (loading) {
@@ -525,6 +577,15 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
           Leave Game
         </button>
       </div>
+      
+      {/* Congratulations popup */}
+      <CongratulationsPopup
+        show={showCongratulations}
+        onClose={handleCloseCongratulations}
+        players={game.players}
+        playerId={playerId}
+        moves={game.moves || []}
+      />
     </div>
   );
 };

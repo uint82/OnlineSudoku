@@ -1,5 +1,10 @@
 from rest_framework import serializers
 from .models import Game, Player, Move
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+import logging
+
+logger = logging.getLogger(__name__)
 
 class PlayerSerializer(serializers.ModelSerializer):
     class Meta:
@@ -64,13 +69,45 @@ class MoveSerializer(serializers.ModelSerializer):
         game.current_board = current_board
         game.save()
         
+        # check if the game is complete after this move
+        is_game_complete = True
+        for r in range(9):
+            for c in range(9):
+                if game.current_board[r][c] != game.solution[r][c]:
+                    is_game_complete = False
+                    break
+            if not is_game_complete:
+                break
+        
+        # if game is complete, mark it
+        if is_game_complete and not game.is_complete:
+            from django.utils import timezone
+            game.is_complete = True
+            game.completed_at = timezone.now()
+            game.completed_by = player
+            game.save()
+            
+            # notify connected clients via WebSocket
+            channel_layer = get_channel_layer()
+            room_group_name = f'game_{game.id}'
+            try:
+                async_to_sync(channel_layer.group_send)(
+                    room_group_name,
+                    {
+                        'type': 'broadcast_game_complete',
+                        'player_id': str(player.id)
+                    }
+                )
+            except Exception as e:
+                logger.error(f"WebSocket notification error: {e}", exc_info=True)
+        
         return move
 
 class GameSerializer(serializers.ModelSerializer):
     players = PlayerSerializer(many=True, read_only=True)
     moves = MoveSerializer(many=True, read_only=True)
+    completed_by = PlayerSerializer(read_only=True)
 
     class Meta:
         model = Game
-        fields = ['id', 'initial_board', 'current_board', 'difficulty', 'created_at', 'last_activity', 'players', 'moves']
-
+        fields = ['id', 'initial_board', 'current_board', 'difficulty', 'created_at', 'last_activity', 'players', 'moves', 'is_complete', 'completed_at', 'completed_by']

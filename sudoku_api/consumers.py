@@ -14,10 +14,12 @@ This file implements the SudokuConsumer for bidirectional communication:
 - Maintains player lists and synchronizes new connections
 - Implements heartbeat mechanism to keep connections alive
 - Handles database operations asynchronously to prevent blocking
+- Automatically checks for game completion after each move
 
 The consumer coordinates between the REST API and WebSocket connections,
 ensuring game state consistency across all connected clients and the database.
 Moves are validated, persisted, and immediately broadcast to all players.
+Game completion is automatically detected and broadcast to all players.
 """
 
 logger = logging.getLogger(__name__)
@@ -118,6 +120,16 @@ class SudokuConsumer(AsyncWebsocketConsumer):
                         }
                     )
 
+                    # check if the game is complete after this move
+                    if move_data.get('game_complete', False):
+                        await self.channel_layer.group_send(
+                            self.room_group_name,
+                            {
+                                'type': 'broadcast_game_complete',
+                                'player_id': player_id
+                            }
+                        )
+
                 except ValueError as ve:
                     # send specific validation error back to client
                     await self.send(text_data=json.dumps({
@@ -146,6 +158,45 @@ class SudokuConsumer(AsyncWebsocketConsumer):
                         'players': all_players
                     }
                 )
+
+            elif message_type == 'game_complete':
+                # handle explicit game completion request
+                player_id = data.get('player_id')
+                
+                if not player_id:
+                    await self.send(text_data=json.dumps({
+                        'type': 'error',
+                        'message': 'Player ID is required'
+                    }))
+                    return
+                    
+                # validate the game is actually complete before marking it
+                is_game_complete = await self.check_game_completion(self.game_id)
+                
+                if not is_game_complete:
+                    await self.send(text_data=json.dumps({
+                        'type': 'error',
+                        'message': 'Game is not yet complete'
+                    }))
+                    return
+                
+                # mark game as complete in database
+                try:
+                    await self.mark_game_complete(player_id)
+                    
+                    # broadcast completion to all players
+                    await self.channel_layer.group_send(
+                        self.room_group_name,
+                        {
+                            'type': 'broadcast_game_complete',
+                            'player_id': player_id
+                        }
+                    )
+                except ValueError as ve:
+                    await self.send(text_data=json.dumps({
+                        'type': 'error',
+                        'message': str(ve)
+                    }))
             
             elif message_type == 'request_player_list':
                 # allow clients to request fresh player list
@@ -192,17 +243,77 @@ class SudokuConsumer(AsyncWebsocketConsumer):
             'players': players
         }))
 
+    async def broadcast_game_complete(self, event):
+        """Broadcast game completion to all connected clients"""
+        player_id = event['player_id']
+        
+        await self.send(text_data=json.dumps({
+            'type': 'game_complete',
+            'player_id': player_id
+        }))
+
+    @database_sync_to_async
+    def check_game_completion(self, game_id):
+        """
+        Check if the game is complete (all cells filled correctly)
+        """
+        try:
+            game = Game.objects.get(id=game_id)
+            
+            # if game is already marked complete, return early
+            if game.is_complete:
+                return True
+                
+            # check if current board matches solution
+            for row in range(9):
+                for col in range(9):
+                    if game.current_board[row][col] != game.solution[row][col]:
+                        return False
+            
+            return True
+        except Game.DoesNotExist:
+            logger.error(f"Game {game_id} not found")
+            return False
+        except Exception as e:
+            logger.error(f"Error checking game completion: {e}", exc_info=True)
+            return False
+
+    @database_sync_to_async
+    def mark_game_complete(self, player_id):
+        """Mark the game as complete in the database"""
+        from django.utils import timezone
+        
+        try:
+            player = Player.objects.get(id=player_id)
+            game = Game.objects.get(id=self.game_id)
+            
+            # only mark as complete if not already completed
+            if not game.is_complete:
+                game.is_complete = True
+                game.completed_at = timezone.now()
+                game.completed_by = player
+                game.save()
+                
+            return True
+        except Player.DoesNotExist:
+            raise ValueError(f"Player {player_id} not found")
+        except Game.DoesNotExist:
+            raise ValueError(f"Game {self.game_id} not found")
+        except Exception as e:
+            logger.error(f"Error marking game as complete: {e}", exc_info=True)
+            raise ValueError(f"Error marking game as complete: {str(e)}")
+
     @database_sync_to_async
     def save_move(self, player_id, row, column, value):
         try:
             player = Player.objects.get(id=player_id)
             game = player.game
             
-            # Check if cell is part of the initial board
+            # check if cell is part of the initial board
             if game.initial_board[row][column] != 0:
                 raise ValueError("Cannot modify initial board cells")
             
-            # Check if there's already a correct move for this cell
+            # check if there's already a correct move for this cell
             existing_correct_move = Move.objects.filter(
                 game=game,
                 row=row,
@@ -213,7 +324,7 @@ class SudokuConsumer(AsyncWebsocketConsumer):
             if existing_correct_move:
                 raise ValueError("Cannot modify a correctly solved cell")
             
-            # Check if the move is correct
+            # check if the move is correct
             is_correct = (game.solution[row][column] == value)
             
             # update the game board
@@ -232,7 +343,25 @@ class SudokuConsumer(AsyncWebsocketConsumer):
                 is_correct=is_correct
             )
             
-            # Return serialized data
+            # check if the game is complete after this move
+            is_game_complete = True
+            for r in range(9):
+                for c in range(9):
+                    if game.current_board[r][c] != game.solution[r][c]:
+                        is_game_complete = False
+                        break
+                if not is_game_complete:
+                    break
+            
+            # if game is complete and not already marked, update the game
+            if is_game_complete and not game.is_complete:
+                from django.utils import timezone
+                game.is_complete = True
+                game.completed_at = timezone.now()
+                game.completed_by = player
+                game.save()
+            
+            # return serialized data
             return {
                 'id': str(move.id),
                 'player': {
@@ -244,7 +373,8 @@ class SudokuConsumer(AsyncWebsocketConsumer):
                 'column': column,
                 'value': value,
                 'is_correct': is_correct,
-                'timestamp': move.timestamp.isoformat()
+                'timestamp': move.timestamp.isoformat(),
+                'game_complete': is_game_complete
             }
         except Player.DoesNotExist:
             logger.error(f"Player {player_id} not found")

@@ -30,6 +30,9 @@ class Game(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     last_activity = models.DateTimeField(auto_now=True)
+    is_complete = models.BooleanField(default=False)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    completed_by = models.ForeignKey('Player', on_delete=models.SET_NULL, null=True, blank=True, related_name='completed_games')
     
     def __str__(self):
         return f"Game {self.id} - {self.difficulty}"
