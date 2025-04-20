@@ -13,7 +13,7 @@ class MoveSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Move
-        fields = ['id', 'player', 'row', 'column', 'value', 'timestamp', 'game_id', 'player_id']
+        fields = ['id', 'player', 'row', 'column', 'value', 'is_correct', 'timestamp', 'game_id', 'player_id']
         read_only_fields = ['id', 'player', 'timestamp']
 
     def create(self, validated_data):
@@ -31,9 +31,26 @@ class MoveSerializer(serializers.ModelSerializer):
         # check if the move is valid (cell should be empty in initial board)
         row = validated_data.get('row')
         column = validated_data.get('column')
+        value = validated_data.get('value')
+        
         if game.initial_board[row][column] != 0:
             raise serializers.ValidationError({'error': 'Cannot modify initial cell'})
+        
+        # check if a previous correct move exists at this position
+        existing_correct_move = Move.objects.filter(
+            game=game,
+            row=row,
+            column=column,
+            is_correct=True
+        ).exists()
+        
+        if existing_correct_move:
+            raise serializers.ValidationError({'error': 'Cannot modify a correctly solved cell'})
             
+        # check if the move is correct (matches solution)
+        is_correct = (game.solution[row][column] == value)
+        validated_data['is_correct'] = is_correct
+        
         # create the move
         move = Move.objects.create(
             game=game,
@@ -43,7 +60,7 @@ class MoveSerializer(serializers.ModelSerializer):
         
         # update the game board
         current_board = game.current_board
-        current_board[row][column] = validated_data.get('value')
+        current_board[row][column] = value
         game.current_board = current_board
         game.save()
         

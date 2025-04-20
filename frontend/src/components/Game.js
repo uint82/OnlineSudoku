@@ -199,6 +199,10 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
       } else if (data.type === 'player_list_update') {
         // handle complete player list update
         updatePlayerList(data.players);
+      } else if (data.type === 'error') {
+        // Display error messages from the server
+        setErrorMessage(data.message);
+        setTimeout(() => setErrorMessage(null), 3000);
       }
     };
 
@@ -296,17 +300,16 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
     });
   };
 
-  const handleMakeMove = (row, col, value) => {
-    // instead of checking if socket is ready, we gon use the sendMessage function
-    // which will queue messages if connection isn't ready
-    
-    // create the move message
+  const handleMakeMove = (row, col, value, isCorrect = null) => {
+    // create the move message with is_correct flag
+    // we pass null for is_correct and let the server handle validation
     const moveMessage = JSON.stringify({
       type: 'move',
       player_id: playerId,
       row: row,
       column: col,
-      value: value
+      value: value,
+      is_correct: isCorrect  // This will be null initially and validated by server
     });
     
     // use enhanced sendMessage function that handles queuing

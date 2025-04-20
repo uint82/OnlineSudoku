@@ -105,17 +105,26 @@ class SudokuConsumer(AsyncWebsocketConsumer):
                     }))
                     return
                 
-                # save the move to database
-                move_data = await self.save_move(player_id, row, column, value)
-                
-                # broadcast move to group
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'broadcast_move',
-                        'move': move_data
-                    }
-                )
+                try:
+                    # save the move to database
+                    move_data = await self.save_move(player_id, row, column, value)
+                    
+                    # broadcast move to group
+                    await self.channel_layer.group_send(
+                        self.room_group_name,
+                        {
+                            'type': 'broadcast_move',
+                            'move': move_data
+                        }
+                    )
+
+                except ValueError as ve:
+                    # send specific validation error back to client
+                    await self.send(text_data=json.dumps({
+                        'type': 'error',
+                        'message': str(ve)
+                    }))
+                    return
             
             elif message_type == 'join':
                 # handle a new player joining
@@ -182,12 +191,30 @@ class SudokuConsumer(AsyncWebsocketConsumer):
             'type': 'player_list_update',
             'players': players
         }))
-    
+
     @database_sync_to_async
     def save_move(self, player_id, row, column, value):
         try:
             player = Player.objects.get(id=player_id)
             game = player.game
+            
+            # Check if cell is part of the initial board
+            if game.initial_board[row][column] != 0:
+                raise ValueError("Cannot modify initial board cells")
+            
+            # Check if there's already a correct move for this cell
+            existing_correct_move = Move.objects.filter(
+                game=game,
+                row=row,
+                column=column,
+                is_correct=True
+            ).exists()
+            
+            if existing_correct_move:
+                raise ValueError("Cannot modify a correctly solved cell")
+            
+            # Check if the move is correct
+            is_correct = (game.solution[row][column] == value)
             
             # update the game board
             current_board = game.current_board
@@ -201,7 +228,8 @@ class SudokuConsumer(AsyncWebsocketConsumer):
                 player=player,
                 row=row,
                 column=column,
-                value=value
+                value=value,
+                is_correct=is_correct
             )
             
             # Return serialized data
@@ -215,11 +243,16 @@ class SudokuConsumer(AsyncWebsocketConsumer):
                 'row': row,
                 'column': column,
                 'value': value,
+                'is_correct': is_correct,
                 'timestamp': move.timestamp.isoformat()
             }
         except Player.DoesNotExist:
             logger.error(f"Player {player_id} not found")
             raise ValueError(f"Player {player_id} not found")
+        except ValueError as ve:
+            # raise specific validation errors
+            logger.error(f"Validation error: {str(ve)}")
+            raise
         except Exception as e:
             logger.error(f"Error saving move: {e}", exc_info=True)
             raise

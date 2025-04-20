@@ -9,8 +9,13 @@ const Cell = ({
   isHighlighted,
   onCellClick, 
   playerColor,
-  hasError 
+  hasError,
+  isCorrect,
+  isOwner
 }) => {
+  
+  const isLocked = isInitial || isCorrect;
+  
   const cellStyle = {
     width: '40px',
     height: '40px',
@@ -18,12 +23,15 @@ const Cell = ({
     alignItems: 'center',
     justifyContent: 'center',
     border: '1px solid #ccc',
-    fontWeight: isInitial ? 'bold' : 'normal',
+    fontWeight: isInitial || isCorrect ? 'bold' : 'normal',
     backgroundColor: hasError ? '#ffcccc' : 
-                   isSelected ? '#6FA6CD' :  // empty cell highlight color
-                   isHighlighted ? '#6FA6CD' : 'white',
-    cursor: isInitial ? 'default' : 'pointer',
-    color: hasError ? 'red' : (isInitial ? 'black' : playerColor || '#666'),
+                   isSelected ? '#6FA6CD' :  
+                   isHighlighted ? '#6FA6CD' : 
+                   isCorrect ? '#d4edda' : 'white',
+    cursor: isLocked ? 'default' : 'pointer',
+    color: hasError ? 'red' : 
+           isInitial ? 'black' : 
+           isCorrect ? '#28a745' : playerColor || '#666',
     transition: 'background-color 0.2s'
   };
 
@@ -42,8 +50,7 @@ const Cell = ({
   }
 
   const handleClick = () => {
-    // allow clicking on any cell for highlighting, but only edit non-initial cells
-    onCellClick(row, col);
+    onCellClick(row, col, isLocked);
   };
 
   return (

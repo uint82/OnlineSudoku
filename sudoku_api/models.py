@@ -50,9 +50,10 @@ class Move(models.Model):
     player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='moves')
     row = models.IntegerField(validators=[MinValueValidator(0), MaxValueValidator(8)])
     column = models.IntegerField(validators=[MinValueValidator(0), MaxValueValidator(8)])
-    value = models.IntegerField(validators=[MinValueValidator(0), MaxValueValidator(9)])  # 0 for clearing a cell, 1-9 for setting
+    value = models.IntegerField(validators=[MinValueValidator(0), MaxValueValidator(9)])
+    is_correct = models.BooleanField(default=False)
     timestamp = models.DateTimeField(auto_now_add=True)
-    
+        
     class Meta:
         # additional constraint to ensure we get proper row/column validation
         constraints = [
