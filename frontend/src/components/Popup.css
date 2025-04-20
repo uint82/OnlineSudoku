@@ -1,0 +1,208 @@
+.popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+/* Popup Container */
+.popup-container {
+  background-color: white;
+  padding: 20px;
+  border-radius: 10px;
+  max-width: 500px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  animation: fade-in 0.5s;
+}
+
+/* Header */
+.popup-header {
+  color: #4CAF50;
+  margin-bottom: 15px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.popup-message {
+  margin-bottom: 20px;
+  font-size: 18px;
+}
+
+/* Section Headers */
+.section-header {
+  color: #2196F3;
+  margin-bottom: 15px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.section-header.purple {
+  color: #9C27B0;
+}
+
+/* Separator Line */
+.separator-line {
+  height: 2px;
+  background-color: #E0E0E0;
+  margin: 0 0 20px 0;
+  width: 100%;
+}
+
+/* Contributors Section */
+.contributors-container {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 25px;
+  flex-wrap: wrap;
+}
+
+.contributor-card {
+  width: 120px;
+  padding: 15px 5px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  position: relative;
+}
+
+.current-player {
+  border: 3px solid #2196F3;
+}
+
+.rank-badge {
+  position: absolute;
+  top: -5px;
+  left: calc(50% - 12px);
+  width: 24px;
+  height: 24px;
+  background-color: #fff;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  font-size: 14px;
+  color: #333;
+}
+
+.gold-rank {
+  background-color: #FFD700;
+  border: 2px solid #FFD700;
+}
+
+.silver-rank {
+  background-color: #C0C0C0;
+  border: 2px solid #C0C0C0;
+}
+
+.bronze-rank {
+  background-color: #CD7F32;
+  border: 2px solid #CD7F32;
+}
+
+/* Player Initial Circle */
+.player-initial {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  margin: 10px auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #fff;
+  font-weight: bold;
+  font-size: 24px;
+}
+
+.player-rank {
+  font-weight: bold;
+  font-size: 16px;
+  margin-bottom: 5px;
+}
+
+.player-score {
+  font-size: 14px;
+}
+
+/* Team Members Section */
+.team-members-container {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 25px;
+}
+
+.member-tag {
+  padding: 6px 12px;
+  color: #fff;
+  border-radius: 20px;
+}
+
+/* Game Stats */
+.game-stats {
+  margin-bottom: 20px;
+  padding: 10px;
+  background-color: #f5f5f5;
+  border-radius: 8px;
+}
+
+.stats-header {
+  margin: 0 0 10px 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.stats-content {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Close Button */
+.close-button {
+  background-color: #4CAF50;
+  color: white;
+  padding: 10px 30px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  transition: all 0.2s ease;
+}
+
+.close-button:hover {
+  background-color: #45a049;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.close-button:active {
+  transform: translateY(0);
+}
+
+/* Animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
