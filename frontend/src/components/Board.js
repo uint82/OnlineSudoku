@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Cell from './Cell';
 import { isValidSudokuMove } from '../utils/sudokuUtils';
 import { Pencil, EyeOff, MessageCircle, Eraser } from 'lucide-react';
+import './Board.css';
 
 const Board = ({ 
   initialBoard, 
@@ -246,14 +247,7 @@ const Board = ({
           <button
             key={number}
             onClick={() => handleNumberSelect(number)}
-            style={{
-              width: '40px',
-              height: '40px',
-              margin: '0 5px',
-              fontSize: '16px',
-              cursor: 'pointer',
-              backgroundColor: pencilMode ? '#e7f3ff' : undefined,
-            }}
+            className={pencilMode ? "pencil-mode" : ""}
           >
             {number}
           </button>
@@ -264,131 +258,49 @@ const Board = ({
 
   const renderControlButtons = () => {
     return (
-      <div className="control-buttons" style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        margin: '15px 0',
-        gap: '20px'
-      }}>
+      <div className="control-buttons">
         {/* Pencil Button */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}>
+        <div className={`control-button ${pencilMode ? 'active' : ''}`}>
           <button
             onClick={togglePencilMode}
-            style={{
-              width: '50px',
-              height: '50px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: pencilMode ? '#b3daff' : 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
             title="Pencil Mode"
           >
             <Pencil size={24} />
           </button>
-          <span style={{ 
-            fontSize: '12px', 
-            marginTop: '5px',
-            color: pencilMode ? '#0066cc' : '#666'
-          }}>
-            Pencil
-          </span>
+          <span>Pencil</span>
         </div>
         
         {/* Hint Button */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}>
+        <div className="control-button">
           <button
             onClick={handleHint}
-            style={{
-              width: '50px',
-              height: '50px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
             title="Get Hint"
           >
             <EyeOff size={24} />
           </button>
-          <span style={{ fontSize: '12px', marginTop: '5px', color: '#666' }}>
-            Hint
-          </span>
+          <span>Hint</span>
         </div>
         
         {/* Chat Button */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}>
+        <div className={`control-button ${showChat ? 'active' : ''}`}>
           <button
             onClick={toggleChat}
-            style={{
-              width: '50px',
-              height: '50px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: showChat ? '#b3daff' : 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
             title="Chat"
           >
             <MessageCircle size={24} />
           </button>
-          <span style={{ 
-            fontSize: '12px', 
-            marginTop: '5px',
-            color: showChat ? '#0066cc' : '#666' 
-          }}>
-            Chat
-          </span>
+          <span>Chat</span>
         </div>
         
         {/* Eraser Button */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}>
+        <div className="control-button eraser-button">
           <button
             onClick={() => handleNumberSelect(0)}
-            style={{
-              width: '50px',
-              height: '50px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: '#f8d7da',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              color: '#721c24',
-            }}
             title="Erase"
           >
             <Eraser size={24} />
           </button>
-          <span style={{ fontSize: '12px', marginTop: '5px', color: '#721c24' }}>
-            Eraser
-          </span>
+          <span>Eraser</span>
         </div>
       </div>
     );
@@ -398,102 +310,49 @@ const Board = ({
     if (!showChat) return null;
     
     return (
-      <div className="chat-container" style={{ 
-        marginTop: '15px', 
-        border: '1px solid #ccc', 
-        borderRadius: '5px',
-        maxHeight: '200px',
-        width: '100%',
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
-        <div className="chat-header" style={{ 
-          padding: '8px',
-          backgroundColor: '#f0f0f0',
-          borderBottom: '1px solid #ccc',
-          fontWeight: 'bold'
-        }}>
+      <div className="chat-container">
+        <div className="chat-header">
           Game Chat
         </div>
         
-        <div className="chat-messages" style={{ 
-          flex: 1,
-          overflowY: 'auto',
-          padding: '8px',
-          maxHeight: '120px'
-        }}>
+        <div className="chat-messages">
           {messages.map(msg => {
             const sender = players.find(p => p.id === msg.sender);
             return (
-              <div key={msg.id} style={{ 
-                marginBottom: '5px',
-                display: 'flex',
-                flexDirection: 'column'
-              }}>
-                <div style={{ 
-                  display: 'flex',
-                  alignItems: 'center',
-                  marginBottom: '2px'
-                }}>
-                  <div style={{ 
-                    width: '10px',
-                    height: '10px',
-                    borderRadius: '50%',
-                    backgroundColor: sender?.color || '#666',
-                    marginRight: '5px'
-                  }}></div>
-                  <span style={{ 
-                    fontSize: '12px',
-                    fontWeight: 'bold'
-                  }}>
+              <div key={msg.id} className="chat-message">
+                <div className="message-header">
+                  <div 
+                    className="player-indicator"
+                    style={{ backgroundColor: sender?.color || '#666' }}
+                  ></div>
+                  <span className="message-sender">
                     {sender?.name || 'Player'} • {new Date(msg.timestamp).toLocaleTimeString()}
                   </span>
                 </div>
-                <div style={{ paddingLeft: '15px' }}>{msg.text}</div>
+                <div className="message-content">{msg.text}</div>
               </div>
             );
           })}
           {messages.length === 0 && (
-            <div style={{ color: '#666', textAlign: 'center', padding: '20px 0' }}>
+            <div className="empty-messages">
               No messages yet
             </div>
           )}
         </div>
         
-        <div className="chat-input" style={{ 
-          display: 'flex',
-          padding: '8px',
-          borderTop: '1px solid #ccc'
-        }}>
+        <div className="chat-input">
           <input 
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Type a message..."
-            style={{ 
-              flex: 1,
-              padding: '5px',
-              borderRadius: '3px',
-              border: '1px solid #ccc',
-              marginRight: '5px'
-            }}
             onKeyPress={(e) => {
               if (e.key === 'Enter') {
                 sendMessage();
               }
             }}
           />
-          <button 
-            onClick={sendMessage}
-            style={{ 
-              padding: '5px 10px',
-              backgroundColor: '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '3px',
-              cursor: 'pointer'
-            }}
-          >
+          <button onClick={sendMessage}>
             Send
           </button>
         </div>
@@ -536,7 +395,7 @@ const Board = ({
       {renderNumberPad()}
       {renderChat()}
       
-      <div style={{ marginTop: '10px', fontSize: '14px', color: '#666' }}>
+      <div className="instructions">
         <p>Click on a number to highlight all matching numbers on the board</p>
         <p>Use the pencil tool to add notes to cells</p>
         <p>Correct answers will be locked and displayed in green</p>
