@@ -264,83 +264,132 @@ const Board = ({
 
   const renderControlButtons = () => {
     return (
-      <div className="control-buttons" style={{ display: 'flex', justifyContent: 'center', margin: '10px 0' }}>
-        <button
-          onClick={togglePencilMode}
-          style={{
-            width: '40px',
-            height: '40px',
-            margin: '0 5px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: pencilMode ? '#b3daff' : '#f0f0f0',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
-          title="Pencil Mode"
-        >
-          <Pencil size={20} />
-        </button>
+      <div className="control-buttons" style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        margin: '15px 0',
+        gap: '20px'
+      }}>
+        {/* Pencil Button */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}>
+          <button
+            onClick={togglePencilMode}
+            style={{
+              width: '50px',
+              height: '50px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: pencilMode ? '#b3daff' : 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+            }}
+            title="Pencil Mode"
+          >
+            <Pencil size={24} />
+          </button>
+          <span style={{ 
+            fontSize: '12px', 
+            marginTop: '5px',
+            color: pencilMode ? '#0066cc' : '#666'
+          }}>
+            Pencil
+          </span>
+        </div>
         
-        <button
-          onClick={handleHint}
-          style={{
-            width: '40px',
-            height: '40px',
-            margin: '0 5px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: '#f0f0f0',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
-          title="Get Hint"
-        >
-          <EyeOff size={20} />
-        </button>
+        {/* Hint Button */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}>
+          <button
+            onClick={handleHint}
+            style={{
+              width: '50px',
+              height: '50px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+            }}
+            title="Get Hint"
+          >
+            <EyeOff size={24} />
+          </button>
+          <span style={{ fontSize: '12px', marginTop: '5px', color: '#666' }}>
+            Hint
+          </span>
+        </div>
         
-        <button
-          onClick={toggleChat}
-          style={{
-            width: '40px',
-            height: '40px',
-            margin: '0 5px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: showChat ? '#b3daff' : '#f0f0f0',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
-          title="Chat"
-        >
-          <MessageCircle size={20} />
-        </button>
+        {/* Chat Button */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}>
+          <button
+            onClick={toggleChat}
+            style={{
+              width: '50px',
+              height: '50px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: showChat ? '#b3daff' : 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+            }}
+            title="Chat"
+          >
+            <MessageCircle size={24} />
+          </button>
+          <span style={{ 
+            fontSize: '12px', 
+            marginTop: '5px',
+            color: showChat ? '#0066cc' : '#666' 
+          }}>
+            Chat
+          </span>
+        </div>
         
-        <button
-          onClick={() => handleNumberSelect(0)}
-          style={{
-            width: '40px',
-            height: '40px',
-            margin: '0 5px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: '#f8d7da',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            color: '#721c24',
-          }}
-          title="Erase"
-        >
-          <Eraser size={20} />
-        </button>
+        {/* Eraser Button */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}>
+          <button
+            onClick={() => handleNumberSelect(0)}
+            style={{
+              width: '50px',
+              height: '50px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: '#f8d7da',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              color: '#721c24',
+            }}
+            title="Erase"
+          >
+            <Eraser size={24} />
+          </button>
+          <span style={{ fontSize: '12px', marginTop: '5px', color: '#721c24' }}>
+            Eraser
+          </span>
+        </div>
       </div>
     );
   };
