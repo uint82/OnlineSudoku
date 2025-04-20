@@ -16,12 +16,32 @@ const Board = ({
   // process the moves data to determine which cells contain errors
   const getErrorCells = () => {
     const errorCells = {};
+    const latestMoves = {};
+    
+    // find the most recent move for each cell
     moves?.forEach(move => {
-      // if the move has an is_correct property and it's false, mark as error
-      if (move.hasOwnProperty('is_correct') && move.is_correct === false) {
-        errorCells[`${move.row}-${move.column}`] = true;
+      const cellKey = `${move.row}-${move.column}`;
+      if (!latestMoves[cellKey] || (move.timestamp || 0) > (latestMoves[cellKey].timestamp || 0)) {
+        latestMoves[cellKey] = move;
       }
     });
+    
+    // mark cells as errors only if their latest move is incorrect
+    Object.values(latestMoves).forEach(move => {
+      if (move.hasOwnProperty('is_correct') && move.is_correct === false) {
+        const cellKey = `${move.row}-${move.column}`;
+        errorCells[cellKey] = true;
+      }
+    });
+    
+    // check for cleared cells (value = 0)
+    Object.keys(errorCells).forEach(key => {
+      const [row, col] = key.split('-').map(Number);
+      if (currentBoard[row][col] === 0) {
+        delete errorCells[key];
+      }
+    });
+    
     return errorCells;
   };
   
@@ -29,16 +49,28 @@ const Board = ({
 
   // find player color and correctness status from the moves list
   const getCellData = (cellRow, cellCol) => {
-    const move = moves?.find(m => m.row === cellRow && m.column === cellCol);
+    const cellKey = `${cellRow}-${cellCol}`;
+    const hasError = errorCells[cellKey];
+    
+    // get the most recent move for this cell
+    const move = moves?.filter(m => m.row === cellRow && m.column === cellCol)
+                      .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
+    
     if (move) {
       const player = players.find(p => p.id === move.player?.id || move.player_id);
+      
+      // important: Check if the current value matches the solution (is now correct)
+      // this allows us to display fixed errors as correct
+      const isCurrentlyCorrect = move.is_correct === true;
+      
       return {
         color: player ? player.color : '#666',
-        isCorrect: move.hasOwnProperty('is_correct') ? move.is_correct : null,
-        playerId: move.player?.id || move.player_id
+        isCorrect: isCurrentlyCorrect,
+        playerId: move.player?.id || move.player_id,
+        hasError: hasError
       };
     }
-    return { color: '#666', isCorrect: null, playerId: null };
+    return { color: '#666', isCorrect: null, playerId: null, hasError: false };
   };
 
   const handleCellClick = (row, col, isLocked) => {
@@ -74,18 +106,17 @@ const Board = ({
   };
 
   const handleNumberSelect = (number) => {
-    // if a cell is selected, make a move
     if (selectedCell) {
       const { row, col } = selectedCell;
       
       // get the current cell data to check if it has an error
       const cellData = getCellData(row, col);
-      const hasError = cellData.isCorrect === false;
+      const hasError = cellData.hasError;
       
-      // Allow editing if:
-      // 1. Cell is empty, OR
-      // 2. Cell has an error (any player can fix errors), OR
-      // 3. Cell was placed by current player
+      // allow editing if:
+      // 1. cell is empty, OR
+      // 2. cell has an error (any player can fix errors), or
+      // 3. cell was placed by current player
       const canEdit = currentBoard[row][col] === 0 || 
                       hasError || 
                       cellData.playerId === playerId;
@@ -99,7 +130,6 @@ const Board = ({
         // handle the delete/clear action (X button)
         // allow any player to delete incorrect values
         if (hasError || cellData.playerId === playerId) {
-          // make a move with 0 to clear the cell, include is_correct: null
           onMakeMove(row, col, 0, null);
         }
       } else {
@@ -154,8 +184,7 @@ const Board = ({
       <div className="sudoku-grid">
         {currentBoard.map((row, rowIndex) =>
           row.map((cell, colIndex) => {
-            const { color, isCorrect, playerId: cellPlayerId } = getCellData(rowIndex, colIndex);
-            const hasError = isCorrect === false;
+            const { color, isCorrect, playerId: cellPlayerId, hasError } = getCellData(rowIndex, colIndex);
             const isOwner = cellPlayerId === playerId;
             
             return (
