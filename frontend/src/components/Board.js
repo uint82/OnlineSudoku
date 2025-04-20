@@ -55,17 +55,21 @@ const Board = ({
       // clear selected cell when clicking on a locked cell
       setSelectedCell(null);
     } else {
-      // always highlight non-empty cells
-      if (currentBoard[row][col] !== 0) {
+      // for empty cells, reset the highlighting
+      if (currentBoard[row][col] === 0) {
+        setHighlightedNumber(null);
+        setSelectedCell({ row, col });
+      } else {
+        // for non-empty cells, handle highlighting
         if (highlightedNumber === currentBoard[row][col]) {
           setHighlightedNumber(null);
         } else {
           setHighlightedNumber(currentBoard[row][col]);
         }
+        
+        // allow selecting the cell regardless of who placed it
+        setSelectedCell({ row, col });
       }
-      
-      // allow selecting the cell regardless of who placed it
-      setSelectedCell({ row, col });
     }
   };
 
