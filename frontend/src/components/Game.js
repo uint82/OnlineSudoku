@@ -410,7 +410,11 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
       <div style={{ maxWidth: '500px', margin: '0 auto', padding: '20px', textAlign: 'center' }}>
         <div className="error">{error}</div>
         <button
-          onClick={() => navigate('/')}
+          onClick={() => { 
+            localStorage.removeItem('gameId');
+            localStorage.removeItem('playerId');
+            navigate('/');
+          }}
           style={{
             backgroundColor: '#3498db',
             color: 'white',

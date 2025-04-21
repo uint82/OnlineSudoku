@@ -12,7 +12,8 @@ const Cell = ({
   hasError,
   isCorrect,
   isOwner,
-  pencilNotes = []
+  pencilNotes = [],
+  isHint
 }) => {
   
   const isLocked = isInitial || isCorrect;
