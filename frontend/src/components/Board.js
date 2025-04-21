@@ -22,6 +22,46 @@ const Board = ({
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [isRequestingHint, setIsRequestingHint] = useState(false);
+  const [hintUsed, setHintUsed] = useState(false);
+  
+  // process the moves data to determine which cells were solved using hints
+  const getHintCells = () => {
+    const hintCells = {};
+    
+    moves?.forEach(move => {
+      if (move.is_hint === true) {
+        const cellKey = `${move.row}-${move.column}`;
+        hintCells[cellKey] = true;
+      }
+    });
+    
+    return hintCells;
+  };
+  
+  // check if current player has already used a hint - both on initial load and when moves change
+  useEffect(() => {
+    // check localStorage for persistence across page refreshes
+    const hintUsedStorageKey = `game_${gameId}_player_${playerId}_hint_used`;
+    const hintUsedFromStorage = localStorage.getItem(hintUsedStorageKey) === 'true';
+    
+    if (hintUsedFromStorage) {
+      setHintUsed(true);
+      return;
+    }
+    
+    // If not in localStorage, check the moves array
+    if (moves && moves.length > 0) {
+      const playerHasUsedHint = moves.some(move => 
+        (move.player?.id === playerId || move.player_id === playerId) && move.is_hint === true
+      );
+      
+      if (playerHasUsedHint) {
+        // store this information in localStorage for persistence
+        localStorage.setItem(hintUsedStorageKey, 'true');
+        setHintUsed(true);
+      }
+    }
+  }, [moves, playerId, gameId]);
   
   // process the moves data to determine which cells contain errors
   const getErrorCells = () => {
@@ -57,11 +97,13 @@ const Board = ({
   };
   
   const errorCells = getErrorCells();
+  const hintCells = getHintCells();
 
   // find player color and correctness status from the moves list
   const getCellData = (cellRow, cellCol) => {
     const cellKey = `${cellRow}-${cellCol}`;
     const isError = errorCells[cellKey] === true;
+    const isHint = hintCells[cellKey] === true;
     
     // get the most recent move for this cell
     const move = moves?.filter(m => m.row === cellRow && m.column === cellCol)
@@ -80,10 +122,11 @@ const Board = ({
         color: player ? player.color : '#666',
         isCorrect: isCurrentlyCorrect,
         playerId: move.player?.id || move.player_id,
-        hasError: isError
+        hasError: isError,
+        isHint: isHint
       };
     }
-    return { color: '#666', isCorrect: null, playerId: null, hasError: false };
+    return { color: '#666', isCorrect: null, playerId: null, hasError: false, isHint: false };
   };
 
   const handleCellClick = (row, col, isLocked) => {
@@ -217,6 +260,12 @@ const Board = ({
       return;
     }
 
+    // check if the player has already used their hint
+    if (hintUsed) {
+      alert("You've already used your hint for this game");
+      return;
+    }
+
     const { row, col } = selectedCell;
     
     // check if this is an initial cell or already solved correctly
@@ -247,7 +296,8 @@ const Board = ({
           type: 'request_hint',
           player_id: playerId,
           row: row,
-          column: col
+          column: col,
+          is_hint: true  // mark this move as a hint
         }));
       } 
       // fall back to REST API if WebSocket isn't available
@@ -261,7 +311,8 @@ const Board = ({
           body: JSON.stringify({
             player_id: playerId,
             row: row,
-            column: col
+            column: col,
+            is_hint: true  // mark this move as a hint
           }),
         });
         
@@ -272,10 +323,15 @@ const Board = ({
         
         const data = await response.json();
         console.log('Hint received from REST API:', data.value);
-        // hint move will be broadcast via WebSocket or handled by the game state
+        // move will be broadcast via WebSocket or handled by the game state
       }
       
-      // Clear selected cell after requesting hint
+      // mark that this player has used their hint
+      const hintUsedStorageKey = `game_${gameId}_player_${playerId}_hint_used`;
+      localStorage.setItem(hintUsedStorageKey, 'true');
+      setHintUsed(true);
+      
+      // clear selected cell after requesting hint
       setSelectedCell(null);
       
     } catch (error) {
@@ -340,15 +396,15 @@ const Board = ({
         </div>
         
         {/* Hint Button */}
-        <div className="control-button">
+        <div className={`control-button ${hintUsed ? 'disabled' : ''}`}>
           <button
             onClick={handleHint}
-            title="Get Hint"
-            disabled={isRequestingHint}
+            title={hintUsed ? "Hint already used" : "Get Hint"}
+            disabled={isRequestingHint || hintUsed}
           >
             <EyeOff size={24} />
           </button>
-          <span>Hint</span>
+          <span>Hint {hintUsed ? "(Used)" : ""}</span>
         </div>
         
         {/* Chat Button */}
@@ -435,7 +491,7 @@ const Board = ({
       <div className="sudoku-grid">
         {currentBoard.map((row, rowIndex) =>
           row.map((cell, colIndex) => {
-            const { color, isCorrect, playerId: cellPlayerId, hasError } = getCellData(rowIndex, colIndex);
+            const { color, isCorrect, playerId: cellPlayerId, hasError, isHint } = getCellData(rowIndex, colIndex);
             const isOwner = cellPlayerId === playerId;
             const cellKey = `${rowIndex}-${colIndex}`;
             const cellNotes = pencilNotes[cellKey] || [];
@@ -455,6 +511,7 @@ const Board = ({
                 isCorrect={isCorrect === true}
                 isOwner={isOwner}
                 pencilNotes={cellNotes}
+                isHint={isHint}
               />
             );
           })
@@ -469,6 +526,7 @@ const Board = ({
         <p>Click on a number to highlight all matching numbers on the board</p>
         <p>Use the pencil tool to add notes to cells</p>
         <p>Correct answers will be locked and displayed in green</p>
+        <p>Answers from hints are shown in yellow (1 hint per player)</p>
         <p>Any player can fix incorrect answers (shown in red)</p>
       </div>
     </div>
