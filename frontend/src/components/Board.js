@@ -151,14 +151,22 @@ const Board = ({
           [cellKey]: newNotes
         });
       } else if (number === 0) {
-        // handle the delete/clear action (erase button)
-        // allow any player to delete incorrect values
-        if (hasError || cellData.playerId === playerId) {
-          onMakeMove(row, col, 0, null);
+        // check if there are pencil notes to clear
+        const cellKey = `${row}-${col}`;
+        const hasPencilNotes = pencilNotes[cellKey] && pencilNotes[cellKey].length > 0;
+        
+        // Allow erasing if:
+        // 1. The cell has pencil notes, OR
+        // 2. The cell has an error, OR
+        // 3. The cell was placed by the current player
+        if (hasPencilNotes || hasError || cellData.playerId === playerId) {
+          // Only make a move if there's an actual value to clear
+          if (currentBoard[row][col] !== 0) {
+            onMakeMove(row, col, 0, null);
+          }
           
-          // also clear pencil notes for this cell
-          const cellKey = `${row}-${col}`;
-          if (pencilNotes[cellKey]) {
+          // Clear pencil notes regardless
+          if (hasPencilNotes) {
             const updatedNotes = { ...pencilNotes };
             delete updatedNotes[cellKey];
             setPencilNotes(updatedNotes);
