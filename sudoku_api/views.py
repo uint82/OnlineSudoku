@@ -169,6 +169,134 @@ class GameViewSet(viewsets.ModelViewSet):
             logger = logging.getLogger(__name__)
             logger.error(f"WebSocket notification error: {e}", exc_info=True)
 
+    @action(detail=True, methods=['post'])
+    def get_hint(self, request, pk=None):
+        game = self.get_object()
+        player_id = request.data.get('player_id')
+        row = request.data.get('row')
+        column = request.data.get('column')
+        
+        # Validate request data
+        if None in (player_id, row, column):
+            return Response(
+                {'error': 'Missing required parameters'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Validate player exists
+            player = get_object_or_404(Player, id=player_id, game=game)
+            
+            # Check if cell is already filled correctly
+            if game.current_board[row][column] == game.solution[row][column]:
+                return Response({
+                    'error': 'Cell already has correct value'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if cell is part of initial board
+            if game.initial_board[row][column] != 0:
+                return Response({
+                    'error': 'Cannot get hint for initial cell'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get correct value from solution
+            correct_value = game.solution[row][column]
+            
+            # Create move record with this hint (marked as correct)
+            move = Move.objects.create(
+                game=game,
+                player=player,
+                row=row,
+                column=column,
+                value=correct_value,
+                is_correct=True
+            )
+            
+            # Update current board
+            current_board = game.current_board
+            current_board[row][column] = correct_value
+            game.current_board = current_board
+            game.save()
+            
+            # Check if the game is complete after this move
+            is_game_complete = True
+            for r in range(9):
+                for c in range(9):
+                    if game.current_board[r][c] != game.solution[r][c]:
+                        is_game_complete = False
+                        break
+                if not is_game_complete:
+                    break
+            
+            # If game is complete, mark it
+            if is_game_complete and not game.is_complete:
+                from django.utils import timezone
+                game.is_complete = True
+                game.completed_at = timezone.now()
+                game.completed_by = player
+                game.save()
+                
+                # Notify connected clients via WebSocket
+                channel_layer = get_channel_layer()
+                room_group_name = f'game_{game.id}'
+                try:
+                    async_to_sync(channel_layer.group_send)(
+                        room_group_name,
+                        {
+                            'type': 'broadcast_game_complete',
+                            'player_id': str(player.id)
+                        }
+                    )
+                except Exception as e:
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"WebSocket notification error: {e}", exc_info=True)
+            
+            # Broadcast the move via WebSocket
+            move_data = {
+                'id': str(move.id),
+                'player': {
+                    'id': str(player.id),
+                    'name': player.name,
+                    'color': player.color
+                },
+                'row': row,
+                'column': column,
+                'value': correct_value,
+                'is_correct': True,
+                'timestamp': move.timestamp.isoformat(),
+                'game_complete': is_game_complete,
+                'is_hint': True  # Add this flag to identify hint moves
+            }
+            
+            # Notify all players of the move
+            channel_layer = get_channel_layer()
+            room_group_name = f'game_{game.id}'
+            async_to_sync(channel_layer.group_send)(
+                room_group_name,
+                {
+                    'type': 'broadcast_move',
+                    'move': move_data
+                }
+            )
+            
+            return Response({
+                'value': correct_value,
+                'message': 'Hint provided'
+            })
+            
+        except Player.DoesNotExist:
+            return Response(
+                {'error': 'Player not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error providing hint: {e}", exc_info=True)
+            return Response(
+                {'error': 'Error providing hint'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 
 class MoveViewSet(viewsets.ModelViewSet):
     queryset = Move.objects.all()

@@ -291,7 +291,7 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
       const newBoard = [...prevGame.current_board];
       newBoard[move.row][move.column] = move.value;
       
-      // Use the enhanced move with player_id
+      // enhanced move with player_id
       const newMoves = [...(prevGame.moves || []), enhancedMove];
       
       return {
@@ -557,6 +557,8 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
         players={game.players}
         playerId={playerId}
         moves={game.moves || []}
+        gameId={gameId}
+        socketState={socketState}
       />
       
       {/* Always show the invite link */}

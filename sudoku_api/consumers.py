@@ -197,6 +197,59 @@ class SudokuConsumer(AsyncWebsocketConsumer):
                         'type': 'error',
                         'message': str(ve)
                     }))
+
+            elif message_type == 'request_hint':
+                # handle a hint request
+                player_id = data.get('player_id')
+                row = data.get('row')
+                column = data.get('column')
+                
+                # validate hint data
+                if None in (player_id, row, column):
+                    await self.send(text_data=json.dumps({
+                        'type': 'error',
+                        'message': 'Invalid hint request data'
+                    }))
+                    return
+                
+                try:
+                    # process the hint request
+                    hint_data = await self.process_hint_request(player_id, row, column)
+                    
+                    # send the hint only to the requesting client
+                    await self.send(text_data=json.dumps({
+                        'type': 'hint_response',
+                        'value': hint_data['value'],
+                        'row': row,
+                        'column': column
+                    }))
+                    
+                    # broadcast the move to all clients
+                    if hint_data.get('move'):
+                        await self.channel_layer.group_send(
+                            self.room_group_name,
+                            {
+                                'type': 'broadcast_move',
+                                'move': hint_data['move']
+                            }
+                        )
+                        
+                    # check if the game is complete after this hint
+                    if hint_data.get('game_complete', False):
+                        await self.channel_layer.group_send(
+                            self.room_group_name,
+                            {
+                                'type': 'broadcast_game_complete',
+                                'player_id': player_id
+                            }
+                        )
+                        
+                except ValueError as ve:
+                    await self.send(text_data=json.dumps({
+                        'type': 'error',
+                        'message': str(ve)
+                    }))
+                    return
             
             elif message_type == 'request_player_list':
                 # allow clients to request fresh player list
@@ -386,6 +439,86 @@ class SudokuConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             logger.error(f"Error saving move: {e}", exc_info=True)
             raise
+
+    @database_sync_to_async
+    def process_hint_request(self, player_id, row, column):
+        try:
+            player = Player.objects.get(id=player_id)
+            game = player.game
+            
+            # check if cell is part of the initial board
+            if game.initial_board[row][column] != 0:
+                raise ValueError("Cannot get hint for initial board cells")
+            
+            # check if the cell already has the correct value
+            if game.current_board[row][column] == game.solution[row][column]:
+                raise ValueError("Cell already has the correct value")
+                
+            # get the correct value from the solution
+            correct_value = game.solution[row][column]
+            
+            # create a move record for this hint
+            move = Move.objects.create(
+                game=game,
+                player=player,
+                row=row,
+                column=column,
+                value=correct_value,
+                is_correct=True
+            )
+            
+            # update the game board
+            current_board = game.current_board
+            current_board[row][column] = correct_value
+            game.current_board = current_board
+            game.save()
+            
+            # check if the game is complete after this move
+            is_game_complete = True
+            for r in range(9):
+                for c in range(9):
+                    if game.current_board[r][c] != game.solution[r][c]:
+                        is_game_complete = False
+                        break
+                if not is_game_complete:
+                    break
+            
+            # if game is complete, mark it
+            if is_game_complete and not game.is_complete:
+                from django.utils import timezone
+                game.is_complete = True
+                game.completed_at = timezone.now()
+                game.completed_by = player
+                game.save()
+                
+            # return the hint data and move info
+            return {
+                'value': correct_value,
+                'move': {
+                    'id': str(move.id),
+                    'player': {
+                        'id': str(player.id),
+                        'name': player.name,
+                        'color': player.color
+                    },
+                    'row': row,
+                    'column': column,
+                    'value': correct_value,
+                    'is_correct': True,
+                    'timestamp': move.timestamp.isoformat(),
+                    'game_complete': is_game_complete,
+                    'is_hint': True  # Flag to identify hint moves
+                },
+                'game_complete': is_game_complete
+            }
+        except Player.DoesNotExist:
+            raise ValueError(f"Player {player_id} not found")
+        except ValueError as ve:
+            # re-raise specific validation errors
+            raise
+        except Exception as e:
+            logger.error(f"Error processing hint: {e}", exc_info=True)
+            raise ValueError(f"Error processing hint: {str(e)}")
     
     @database_sync_to_async
     def get_player_data(self, player_id):

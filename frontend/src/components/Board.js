@@ -10,7 +10,9 @@ const Board = ({
   onMakeMove, 
   players, 
   playerId,
-  moves
+  moves,
+  gameId,
+  socketState
 }) => {
   const [selectedCell, setSelectedCell] = useState(null);
   const [highlightedNumber, setHighlightedNumber] = useState(null);
@@ -19,6 +21,7 @@ const Board = ({
   const [showChat, setShowChat] = useState(false);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
+  const [isRequestingHint, setIsRequestingHint] = useState(false);
   
   // process the moves data to determine which cells contain errors
   const getErrorCells = () => {
@@ -208,19 +211,77 @@ const Board = ({
     }
   };
 
-  const handleHint = () => {
-    if (selectedCell) {
-      const { row, col } = selectedCell;
-      // in a real implementation, this would call an API or use a solver
-      // to get the correct value for the selected cell
-      // for now, we'll show a placeholder message
-      alert("Hint functionality would provide the correct value for this cell");
-      
-      // in a real implementation, i'll do something like:
-      // const correctValue = getSolution(row, col);
-      // onMakeMove(row, col, correctValue, true);
-    } else {
+  const handleHint = async () => {
+    if (!selectedCell) {
       alert("Please select a cell first to get a hint");
+      return;
+    }
+
+    const { row, col } = selectedCell;
+    
+    // check if this is an initial cell or already solved correctly
+    if (initialBoard[row][col] !== 0) {
+      alert("Cannot get hint for initial board cells");
+      return;
+    }
+    
+    // check if the cell already has the correct value
+    const cellData = getCellData(row, col);
+    if (cellData.isCorrect === true) {
+      alert("This cell already has the correct value");
+      return;
+    }
+    
+    // prevent multiple hint requests
+    if (isRequestingHint) {
+      return;
+    }
+    
+    setIsRequestingHint(true);
+    
+    try {
+      // Try WebSocket approach first
+      if (socketState && socketState.isReady && socketState.isReady()) {
+        console.log("Requesting hint via WebSocket");
+        socketState.sendMessage(JSON.stringify({
+          type: 'request_hint',
+          player_id: playerId,
+          row: row,
+          column: col
+        }));
+      } 
+      // fall back to REST API if WebSocket isn't available
+      else {
+        console.log("Requesting hint via REST API");
+        const response = await fetch(`http://localhost:8000/api/games/${gameId}/get_hint/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            player_id: playerId,
+            row: row,
+            column: col
+          }),
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to get hint');
+        }
+        
+        const data = await response.json();
+        console.log('Hint received from REST API:', data.value);
+        // hint move will be broadcast via WebSocket or handled by the game state
+      }
+      
+      // Clear selected cell after requesting hint
+      setSelectedCell(null);
+      
+    } catch (error) {
+      alert(`Error getting hint: ${error.message}`);
+    } finally {
+      setIsRequestingHint(false);
     }
   };
 
@@ -283,6 +344,7 @@ const Board = ({
           <button
             onClick={handleHint}
             title="Get Hint"
+            disabled={isRequestingHint}
           >
             <EyeOff size={24} />
           </button>
