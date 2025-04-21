@@ -198,6 +198,42 @@ class SudokuConsumer(AsyncWebsocketConsumer):
                         'message': str(ve)
                     }))
 
+            elif message_type == 'quick_chat':
+                # handle quick chat messages
+                player_id = data.get('player_id')
+                message = data.get('message')
+                timestamp = data.get('timestamp', self.get_timestamp())
+                
+                if not player_id or not message:
+                    await self.send(text_data=json.dumps({
+                        'type': 'error',
+                        'message': 'Invalid quick chat data'
+                    }))
+                    return
+                
+                # get player data to include in the broadcast
+                player = await self.get_player_data(player_id)
+                
+                if not player:
+                    await self.send(text_data=json.dumps({
+                        'type': 'error',
+                        'message': 'Player not found'
+                    }))
+                    return
+                
+                # broadcast the quick chat message to all players
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        'type': 'broadcast_quick_chat',
+                        'player_id': player_id,
+                        'player': player,
+                        'message': message,
+                        'timestamp': timestamp
+                    }
+                )
+
+
             elif message_type == 'request_hint':
                 # handle a hint request
                 player_id = data.get('player_id')
@@ -303,6 +339,16 @@ class SudokuConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'type': 'game_complete',
             'player_id': player_id
+        }))
+
+    async def broadcast_quick_chat(self, event):
+        """Broadcast quick chat messages to all connected clients"""
+        await self.send(text_data=json.dumps({
+            'type': 'quick_chat',
+            'player_id': event['player_id'],
+            'player': event['player'],
+            'message': event['message'],
+            'timestamp': event['timestamp']
         }))
 
     @database_sync_to_async

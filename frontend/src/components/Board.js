@@ -12,17 +12,35 @@ const Board = ({
   playerId,
   moves,
   gameId,
-  socketState
+  socketState,
+  broadcastQuickChat,
+  chatMessages,
 }) => {
   const [selectedCell, setSelectedCell] = useState(null);
   const [highlightedNumber, setHighlightedNumber] = useState(null);
   const [pencilMode, setPencilMode] = useState(false);
   const [pencilNotes, setPencilNotes] = useState({});
-  const [showChat, setShowChat] = useState(false);
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState('');
   const [isRequestingHint, setIsRequestingHint] = useState(false);
   const [hintUsed, setHintUsed] = useState(false);
+  const [showQuickChat, setShowQuickChat] = useState(false);
+  const [quickChatPosition, setQuickChatPosition] = useState({ x: 0, y: 0 });
+  const [temporaryMessages, setTemporaryMessages] = useState([]);
+
+  const quickChatOptions = {
+    messages: [
+      "Good move!",
+      "I need help here",
+      "Let's solve this together",
+      "Almost there!",
+      "Nice strategy",
+      "I'm stuck..."
+    ],
+    emojis: ["👍", "👏", "🎉", "🤔", "❤️", "😊", "🙌", "🧩"]
+  };
+
+  useEffect(() => {
+    console.log("Chat messages received in Board:", chatMessages);
+  }, [chatMessages]);
   
   // process the moves data to determine which cells were solved using hints
   const getHintCells = () => {
@@ -62,6 +80,23 @@ const Board = ({
       }
     }
   }, [moves, playerId, gameId]);
+
+  
+
+  // when chatMessages prop changes, add them to temporaryMessages
+  useEffect(() => {
+    if (chatMessages && chatMessages.length > 0) {
+      // get the latest chat message
+      const latestMessage = chatMessages[chatMessages.length - 1];
+      
+      // skip adding messages from the current player (they'll be added directly in sendQuickChatMessage)
+      if (latestMessage && latestMessage.player_id !== playerId) {
+        console.log("Adding chat message to temporary messages:", latestMessage);
+        addTemporaryMessage(latestMessage);
+      }
+    }
+  }, [chatMessages]);
+
   
   // process the moves data to determine which cells contain errors
   const getErrorCells = () => {
@@ -206,12 +241,12 @@ const Board = ({
         // 2. The cell has an error, OR
         // 3. The cell was placed by the current player
         if (hasPencilNotes || hasError || cellData.playerId === playerId) {
-          // Only make a move if there's an actual value to clear
+          // only make a move if there's an actual value to clear
           if (currentBoard[row][col] !== 0) {
             onMakeMove(row, col, 0, null);
           }
           
-          // Clear pencil notes regardless
+          // clear pencil notes regardless
           if (hasPencilNotes) {
             const updatedNotes = { ...pencilNotes };
             delete updatedNotes[cellKey];
@@ -289,7 +324,7 @@ const Board = ({
     setIsRequestingHint(true);
     
     try {
-      // Try WebSocket approach first
+      // try WebSocket approach first
       if (socketState && socketState.isReady && socketState.isReady()) {
         console.log("Requesting hint via WebSocket");
         socketState.sendMessage(JSON.stringify({
@@ -297,7 +332,7 @@ const Board = ({
           player_id: playerId,
           row: row,
           column: col,
-          is_hint: true  // mark this move as a hint
+          is_hint: true  
         }));
       } 
       // fall back to REST API if WebSocket isn't available
@@ -312,7 +347,7 @@ const Board = ({
             player_id: playerId,
             row: row,
             column: col,
-            is_hint: true  // mark this move as a hint
+            is_hint: true  
           }),
         });
         
@@ -345,24 +380,68 @@ const Board = ({
     setPencilMode(!pencilMode);
   };
 
-  const toggleChat = () => {
-    setShowChat(!showChat);
+  const toggleQuickChat = (event) => {
+    if (event) {
+      // position the panel near the button
+      const buttonRect = event.currentTarget.getBoundingClientRect();
+      setQuickChatPosition({
+        x: buttonRect.left,
+        y: buttonRect.bottom + 10
+      });
+    }
+    setShowQuickChat(!showQuickChat);
+    
   };
 
-  const sendMessage = () => {
-    if (newMessage.trim()) {
-      const message = {
-        id: Date.now(),
-        text: newMessage,
-        sender: playerId,
+  const sendQuickChatMessage = (message) => {
+    if (!message) return;
+    
+    // if broadcastQuickChat is available, use it
+    if (broadcastQuickChat) {
+      broadcastQuickChat(message);
+    } else if (socketState && socketState.isReady && socketState.isReady()) {
+      // fallback to direct socket communication
+      const quickMessage = {
+        type: 'quick_chat',
+        player_id: playerId,
+        message: message,
         timestamp: new Date().toISOString()
       };
       
-      setMessages([...messages, message]);
-      setNewMessage('');
-      
-      // chat function is on development
+      socketState.sendMessage(JSON.stringify(quickMessage));
     }
+    
+    // close the quick chat panel
+    setShowQuickChat(false);
+    
+    // add to local messages for immediate feedback
+    addTemporaryMessage({
+      type: 'quick_chat',
+      player_id: playerId,
+      player: players.find(p => p.id === playerId),
+      message: message,
+      timestamp: new Date().toISOString(),
+      id: Date.now()
+    });
+  };
+
+    const addTemporaryMessage = (message) => {
+    console.log("Adding temporary message:", message);
+    
+    // add new message with unique ID
+    const messageWithId = {
+      ...message,
+      id: message.id || Date.now()
+    };
+    
+    setTemporaryMessages(prev => [...prev, messageWithId]);
+    
+    // remove message after 3 seconds
+    setTimeout(() => {
+      setTemporaryMessages(prev => 
+        prev.filter(msg => msg.id !== messageWithId.id)
+      );
+    }, 3000);
   };
 
   const renderNumberPad = () => {
@@ -407,11 +486,11 @@ const Board = ({
           <span>Hint {hintUsed ? "(Used)" : ""}</span>
         </div>
         
-        {/* Chat Button */}
-        <div className={`control-button ${showChat ? 'active' : ''}`}>
+        {/* QuickChat Button  */}
+        <div className={`control-button ${showQuickChat ? 'active' : ''}`}>
           <button
-            onClick={toggleChat}
-            title="Chat"
+            onClick={toggleQuickChat}
+            title="Quick Chat"
           >
             <MessageCircle size={24} />
           </button>
@@ -432,59 +511,87 @@ const Board = ({
     );
   };
 
-  const renderChat = () => {
-    if (!showChat) return null;
+  const renderQuickChatPanel = () => {
+    if (!showQuickChat) return null;
     
     return (
-      <div className="chat-container">
-        <div className="chat-header">
-          Game Chat
-        </div>
-        
-        <div className="chat-messages">
-          {messages.map(msg => {
-            const sender = players.find(p => p.id === msg.sender);
-            return (
-              <div key={msg.id} className="chat-message">
-                <div className="message-header">
-                  <div 
-                    className="player-indicator"
-                    style={{ backgroundColor: sender?.color || '#666' }}
-                  ></div>
-                  <span className="message-sender">
-                    {sender?.name || 'Player'} • {new Date(msg.timestamp).toLocaleTimeString()}
-                  </span>
-                </div>
-                <div className="message-content">{msg.text}</div>
-              </div>
-            );
-          })}
-          {messages.length === 0 && (
-            <div className="empty-messages">
-              No messages yet
-            </div>
-          )}
-        </div>
-        
-        <div className="chat-input">
-          <input 
-            type="text"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Type a message..."
-            onKeyPress={(e) => {
-              if (e.key === 'Enter') {
-                sendMessage();
-              }
-            }}
-          />
-          <button onClick={sendMessage}>
-            Send
+      <div 
+        className="quick-chat-panel"
+        style={{
+          position: 'absolute',
+          left: `${quickChatPosition.x}px`,
+          top: `${quickChatPosition.y}px`,
+          zIndex: 1001
+        }}
+      >
+        <div className="quick-chat-header">
+          <h4>Quick Chat</h4>
+          <button 
+            className="close-quick-chat"
+            onClick={() => setShowQuickChat(false)}
+          >
+            &times;
           </button>
+        </div>
+        
+        <div className="quick-chat-section">
+          <h5>Messages</h5>
+          <div className="quick-messages">
+            {quickChatOptions.messages.map((message, index) => (
+              <button 
+                key={index} 
+                onClick={() => sendQuickChatMessage(message)}
+                className="quick-message-btn"
+              >
+                {message}
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        <div className="quick-chat-section">
+          <h5>Reactions</h5>
+          <div className="quick-emojis">
+            {quickChatOptions.emojis.map((emoji, index) => (
+              <button 
+                key={index} 
+                onClick={() => sendQuickChatMessage(emoji)}
+                className="quick-emoji-btn"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     );
   };
+
+  const renderTemporaryMessages = () => {
+    if (temporaryMessages.length === 0) return null;
+    
+    return (
+      <div className="temporary-messages-container">
+        {temporaryMessages.map(msg => {
+          const sender = msg.player || players.find(p => p.id === msg.player_id);
+          
+          return (
+            <div key={msg.id} className="temporary-message">
+              <div 
+                className="temp-message-indicator"
+                style={{ backgroundColor: sender?.color || '#666' }}
+              ></div>
+              <div className="temp-message-content">
+                <span className="temp-message-sender">{sender?.name || 'Player'}</span>
+                <span className="temp-message-text">{msg.message}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
 
   return (
     <div className="board-container">
@@ -520,7 +627,8 @@ const Board = ({
       
       {renderControlButtons()}
       {renderNumberPad()}
-      {renderChat()}
+      {renderQuickChatPanel()}
+      {renderTemporaryMessages()}
       
       <div className="instructions">
         <p>Click on a number to highlight all matching numbers on the board</p>

@@ -26,6 +26,7 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
   const [errorMessage, setErrorMessage] = useState(null);
   const [showCongratulations, setShowCongratulations] = useState(false);
   const [completionAcknowledged, setCompletionAcknowledged] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
   
   // join form
   const [playerName, setPlayerName] = useState('');
@@ -142,6 +143,27 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
     }
   }, [connectionStatus, socketState]);
 
+  useEffect(() => {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      const handleWebSocketMessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log("WebSocket message received in Game:", data);
+        
+        // handle specific message types if needed
+        if (data.type === 'quick_chat') {
+          console.log("Quick chat message received:", data);
+          // pass to board component via props
+        }
+      };
+      
+      socket.addEventListener('message', handleWebSocketMessage);
+      
+      return () => {
+        socket.removeEventListener('message', handleWebSocketMessage);
+      };
+    }
+  }, [socket]);
+
   const fetchGameDetails = async () => {
     try {
       const response = await axios.get(`http://localhost:8000/api/games/${gameId}/`);
@@ -223,11 +245,10 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
         // update board with new move
         handleRemoteMove(data.move);
       } else if (data.type === 'join') {
-        // Handle new player joining
+        // handle new player joining
         handlePlayerJoin(data.player);
         
         // when we receive a join message, also request a fresh player list
-        // ensures that our player list stays in sync
         if (socketState && socketState.isReady()) {
           socketState.sendMessage(JSON.stringify({
             type: 'request_player_list'
@@ -243,6 +264,22 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
         // display error messages from the server
         setErrorMessage(data.message);
         setTimeout(() => setErrorMessage(null), 3000);
+      } else if (data.type === 'quick_chat') {
+        console.log("RECEIVED QUICK CHAT:", data); // debug
+        setChatMessages(prev => {
+          // check if this message is already in our list to avoid duplicates
+          const isDuplicate = prev.some(msg => 
+            msg.timestamp === data.timestamp && 
+            msg.player_id === data.player_id &&
+            msg.message === data.message
+          );
+          
+          if (!isDuplicate) {
+            console.log("Adding quick chat message to state:", data);
+            return [...prev, data];
+          }
+          return prev;
+        });
       }
     };
 
@@ -355,7 +392,7 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
       row: row,
       column: col,
       value: value,
-      is_correct: isCorrect  // This will be null initially and validated by server
+      is_correct: isCorrect 
     });
     
     // use enhanced sendMessage function that handles queuing
@@ -392,6 +429,61 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
       onLeaveGame();
     } else {
       navigate('/');
+    }
+  };
+
+  const broadcastQuickChat = (message) => {
+    // socket state checking
+    if (socket && 
+        socket.readyState === WebSocket.OPEN && 
+        socketState && 
+        socketState.isReady && 
+        socketState.isReady()) {
+      
+      console.log("Broadcasting quick chat via main socket:", message);
+      const chatMessage = {
+        type: 'quick_chat',
+        player_id: playerId,
+        message: message,
+        timestamp: new Date().toISOString()
+      };
+      socket.send(JSON.stringify(chatMessage));
+      
+      // add to local chatMessages state for immediate feedback
+      setChatMessages(prev => [...prev, chatMessage]);
+    } else {
+      console.log("Primary socket not ready, trying socketState sendMessage...");
+      
+      // fall back to socketState's sendMessage function if available
+      if (socketState && socketState.sendMessage) {
+        const chatMessage = {
+          type: 'quick_chat',
+          player_id: playerId,
+          message: message,
+          timestamp: new Date().toISOString()
+        };
+        
+        const success = socketState.sendMessage(JSON.stringify(chatMessage));
+        
+        if (success) {
+          console.log("Message sent via socketState.sendMessage");
+          // add to local state for immediate feedback
+          setChatMessages(prev => [...prev, chatMessage]);
+        } else {
+          console.error("Failed to send message via socketState.sendMessage");
+          
+          // add to local state to provide user feedback
+          setChatMessages(prev => [...prev, chatMessage]);
+          
+          // show error message briefly
+          setErrorMessage("Message not sent to other players - reconnecting...");
+          setTimeout(() => setErrorMessage(null), 3000);
+        }
+      } else {
+        console.error("No working socket available for sending messages");
+        setErrorMessage("Cannot send messages - connection lost");
+        setTimeout(() => setErrorMessage(null), 3000);
+      }
     }
   };
 
@@ -563,6 +655,8 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
         moves={game.moves || []}
         gameId={gameId}
         socketState={socketState}
+        broadcastQuickChat={broadcastQuickChat}
+        chatMessages={chatMessages}
       />
       
       {/* Always show the invite link */}
