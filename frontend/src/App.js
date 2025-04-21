@@ -59,14 +59,18 @@ const App = () => {
         <header className="App-header">
           <h1>Sudoku Multiplayer</h1>
           <nav>
-            <Link to="/">Home</Link>
+    {/* link navigation */}
           </nav>
         </header>
         
         <main>
           <Routes>
             <Route path="/" element={<GameRouteContent />} />
+            <Route path="/create" element={<HomePage initialMode="create" />} />
+            <Route path="/create/details" element={<HomePage />} />
+            <Route path="/lobby" element={<HomePage initialMode="find" />} />
             <Route path="/join/:gameId" element={<Game />} />
+            <Route path="/game/:gameId" element={<Game />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation, useParams } from 'react-router-dom';
 import axios from 'axios';
 import './HomePage.css'
 
-const HomePage = () => {
+const HomePage = ({ initialMode }) => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showFindGames, setShowFindGames] = useState(false);
   const [showNameColorForm, setShowNameColorForm] = useState(false);
@@ -15,7 +15,10 @@ const HomePage = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [selectedGameId, setSelectedGameId] = useState(null);
   const [joinMode, setJoinMode] = useState(false);
+  
   const navigate = useNavigate();
+  const location = useLocation();
+  const { gameId } = useParams();
 
   // colors for player selection
   const colorOptions = [
@@ -23,12 +26,42 @@ const HomePage = () => {
     '#9b59b6', '#1abc9c', '#d35400', '#34495e'
   ];
 
-  // fetch available games when "Find Game" is clicked
+  // handle route-based initialization
   useEffect(() => {
-    if (showFindGames) {
+    // reset all view states
+    setShowCreateForm(false);
+    setShowFindGames(false);
+    setShowNameColorForm(false);
+    setJoinMode(false);
+    
+    // set view state based on path
+    if (location.pathname === '/create') {
+      setShowCreateForm(true);
+    } else if (location.pathname === '/create/details') {
+      setShowNameColorForm(true);
+      setJoinMode(false);
+    } else if (location.pathname === '/lobby') {
+      setShowFindGames(true);
+      fetchAvailableGames();
+    } else if (location.pathname.startsWith('/join/')) {
+      const gameIdFromUrl = location.pathname.split('/')[2];
+      if (gameIdFromUrl) {
+        setSelectedGameId(gameIdFromUrl);
+        setShowNameColorForm(true);
+        setJoinMode(true);
+      }
+    }
+  }, [location.pathname]);
+
+  // initialize based on props if provided
+  useEffect(() => {
+    if (initialMode === 'create') {
+      setShowCreateForm(true);
+    } else if (initialMode === 'find') {
+      setShowFindGames(true);
       fetchAvailableGames();
     }
-  }, [showFindGames]);
+  }, [initialMode]);
 
   const fetchAvailableGames = async () => {
     setLoading(true);
@@ -64,7 +97,7 @@ const HomePage = () => {
       localStorage.setItem('playerId', response.data.player_id);
       
       // redirect to the game page
-      window.location.href = '/';
+      navigate(`/game/${response.data.id}`);
       
     } catch (error) {
       console.error('Error creating game:', error);
@@ -75,10 +108,7 @@ const HomePage = () => {
   };
 
   const handlePrepareJoinGame = (gameId) => {
-    setSelectedGameId(gameId);
-    setJoinMode(true);
-    setShowNameColorForm(true);
-    setShowFindGames(false);
+    navigate(`/join/${gameId}`);
   };
 
   const joinGame = async (e) => {
@@ -101,7 +131,7 @@ const HomePage = () => {
       localStorage.setItem('playerId', response.data.player_id);
       
       // redirect to the game page
-      window.location.href = '/';
+      navigate('/');
       
     } catch (error) {
       console.error('Error joining game:', error);
@@ -112,16 +142,12 @@ const HomePage = () => {
   };
 
   const handlePrepareCreateGame = () => {
-    setShowCreateForm(true);
-    setShowFindGames(false);
-    setErrorMessage('');
+    navigate('/create');
   };
 
   const handleSelectDifficulty = (e) => {
     e.preventDefault();
-    setJoinMode(false);
-    setShowCreateForm(false);
-    setShowNameColorForm(true);
+    navigate('/create/details');
   };
 
   const renderMainOptions = () => (
@@ -138,11 +164,7 @@ const HomePage = () => {
         </button>
         <button 
           className="btn btn-find"
-          onClick={() => {
-            setShowFindGames(true);
-            setShowCreateForm(false);
-            setErrorMessage('');
-          }}
+          onClick={() => navigate('/lobby')}
         >
           Find Game
         </button>
@@ -174,7 +196,7 @@ const HomePage = () => {
           <button 
             type="button" 
             className="btn btn-secondary"
-            onClick={() => setShowCreateForm(false)}
+            onClick={() => navigate('/')}
           >
             Back
           </button>
@@ -223,7 +245,7 @@ const HomePage = () => {
       </button>
       <button 
         className="btn btn-secondary"
-        onClick={() => setShowFindGames(false)}
+        onClick={() => navigate('/')}
       >
         Back
       </button>
@@ -268,11 +290,10 @@ const HomePage = () => {
             type="button" 
             className="btn btn-secondary"
             onClick={() => {
-              setShowNameColorForm(false);
               if (joinMode) {
-                setShowFindGames(true);
+                navigate('/lobby');
               } else {
-                setShowCreateForm(true);
+                navigate('/create');
               }
             }}
           >
