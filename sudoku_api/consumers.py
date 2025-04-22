@@ -198,6 +198,42 @@ class SudokuConsumer(AsyncWebsocketConsumer):
                         'message': str(ve)
                     }))
 
+            elif message_type == 'cell_focus':
+                player_id = data.get('player_id')
+                row = data.get('row')
+                column = data.get('column')
+                focus_type = data.get('focus_type')  # 'focus' or 'blur'
+                
+                if None in (player_id, row, column, focus_type):
+                    await self.send(text_data=json.dumps({
+                        'type': 'error',
+                        'message': 'Invalid cell focus data'
+                    }))
+                    return
+                
+                # get player data to include color information
+                player = await self.get_player_data(player_id)
+                
+                if not player:
+                    await self.send(text_data=json.dumps({
+                        'type': 'error',
+                        'message': 'Player not found'
+                    }))
+                    return
+                
+                # broadcast the cell focus update to all players
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        'type': 'broadcast_cell_focus',
+                        'player_id': player_id,
+                        'player': player,
+                        'row': row,
+                        'column': column,
+                        'focus_type': focus_type
+                    }
+                )
+
             elif message_type == 'quick_chat':
                 # handle quick chat messages
                 player_id = data.get('player_id')
@@ -349,6 +385,17 @@ class SudokuConsumer(AsyncWebsocketConsumer):
             'player': event['player'],
             'message': event['message'],
             'timestamp': event['timestamp']
+        }))
+
+    async def broadcast_cell_focus(self, event):
+        """Broadcast cell focus information to all connected clients"""
+        await self.send(text_data=json.dumps({
+            'type': 'cell_focus',
+            'player_id': event['player_id'],
+            'player': event['player'],
+            'row': event['row'],
+            'column': event['column'],
+            'focus_type': event['focus_type']
         }))
 
     @database_sync_to_async

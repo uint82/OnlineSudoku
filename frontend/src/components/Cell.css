@@ -1,0 +1,67 @@
+.sudoku-cell {
+  position: relative;
+}
+
+.cell-with-focus {
+  z-index: 5;
+  position: relative;
+}
+
+.focus-indicator {
+  pointer-events: none;
+  animation: focus-pulse 2s infinite;
+  z-index: 4;
+}
+
+.focus-tooltip {
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.cell-with-focus:hover .focus-tooltip {
+  opacity: 1 !important;
+}
+
+@keyframes focus-pulse {
+  0% {
+    opacity: 0.8;
+    box-shadow: 0 0 5px 1px rgba(255, 255, 255, 0.7);
+  }
+  50% {
+    opacity: 0.6;
+    box-shadow: 0 0 15px 3px rgba(255, 255, 255, 0.5);
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 0.8;
+    box-shadow: 0 0 5px 1px rgba(255, 255, 255, 0.7);
+  }
+}
+
+/* Styling for other cell states */
+.locked-cell {
+  background-color: #f9f9f9;
+}
+
+.correct-cell {
+  background-color: #d4edda !important;
+}
+
+.error-cell {
+  background-color: #f8d7da !important;
+}
+
+.hint-cell {
+  background-color: #fff3cd !important;
+}
+
+.selected-cell {
+  background-color: #6fa6cd !important;
+  z-index: 3;
+}
+
+.highlighted-cell {
+  background-color: #89cff0 !important;
+}

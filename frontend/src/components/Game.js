@@ -1,48 +1,55 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import Board from './Board';
-import Invite from './Invite';
-import GameControls from './GameControls';
-import CongratulationsPopup from './Popup';
-import { setupWebSocketWithHeartbeat } from '../utils/websocketUtils';
-import { isBoardComplete } from '../utils/sudokuUtils';
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import axios from "axios";
+import Board from "./Board";
+import Invite from "./Invite";
+import GameControls from "./GameControls";
+import CongratulationsPopup from "./Popup";
+import { setupWebSocketWithHeartbeat } from "../utils/websocketUtils";
+import { isBoardComplete } from "../utils/sudokuUtils";
 
 const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
   const params = useParams();
   const navigate = useNavigate();
-  
+
   // use URL parameter if provided, otherwise use prop
   const gameId = params.gameId || gameIdProp;
-  
+
   const [game, setGame] = useState(null);
   const [playerId, setPlayerId] = useState(playerIdProp || null);
   const [socket, setSocket] = useState(null);
   const [socketCleanup, setSocketCleanup] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [connectionStatus, setConnectionStatus] = useState('disconnected');
+  const [connectionStatus, setConnectionStatus] = useState("disconnected");
   const [socketState, setSocketState] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [showCongratulations, setShowCongratulations] = useState(false);
   const [completionAcknowledged, setCompletionAcknowledged] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
-  
+  const [cellFocus, setCellFocus] = useState({});
+
   // join form
-  const [playerName, setPlayerName] = useState('');
-  const [playerColor, setPlayerColor] = useState('#e74c3c');
+  const [playerName, setPlayerName] = useState("");
+  const [playerColor, setPlayerColor] = useState("#e74c3c");
 
   // colors for player selection
   const colorOptions = [
-    '#e74c3c', '#3498db', '#2ecc71', '#f39c12', 
-    '#9b59b6', '#1abc9c', '#d35400', '#34495e'
+    "#e74c3c",
+    "#3498db",
+    "#2ecc71",
+    "#f39c12",
+    "#9b59b6",
+    "#1abc9c",
+    "#d35400",
+    "#34495e",
   ];
 
   useEffect(() => {
     // check if user is already part of this game or a different game
-    const savedGameId = localStorage.getItem('gameId');
-    const savedPlayerId = localStorage.getItem('playerId');
-    
+    const savedGameId = localStorage.getItem("gameId");
+    const savedPlayerId = localStorage.getItem("playerId");
+
     if (savedGameId && savedPlayerId) {
       if (savedGameId === gameId) {
         // if user is already part of this game
@@ -52,27 +59,28 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
         const confirmSwitch = window.confirm(
           "You're already in another game. Do you want to leave that game and join this one?"
         );
-        
+
         if (confirmSwitch) {
           // clear existing game data
-          localStorage.removeItem('gameId');
-          localStorage.removeItem('playerId');
+          localStorage.removeItem("gameId");
+          localStorage.removeItem("playerId");
         } else {
           // redirect back to their current game
-          navigate('/');
+          navigate("/");
           return;
         }
       }
     }
-    const hasAcknowledged = localStorage.getItem(`game_${gameId}_completed_acknowledged`) === 'true';
+    const hasAcknowledged =
+      localStorage.getItem(`game_${gameId}_completed_acknowledged`) === "true";
     if (hasAcknowledged) {
       setCompletionAcknowledged(true);
     }
-    
+
     if (gameId) {
       fetchGameDetails();
     }
-    
+
     // clean up socket on unmount
     return () => {
       if (socketCleanup) {
@@ -85,17 +93,19 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
     if (playerId && game) {
       // connect to websocket
       connectWebSocket();
-      
+
       // set up a polling interval for player list updates
       // this serves as a backup in case WebSocket messages are missed
       const playerListInterval = setInterval(() => {
         if (socketState && socketState.isReady()) {
-          socketState.sendMessage(JSON.stringify({
-            type: 'request_player_list'
-          }));
+          socketState.sendMessage(
+            JSON.stringify({
+              type: "request_player_list",
+            })
+          );
         }
       }, 5000); // check every 5 seconds
-      
+
       return () => {
         clearInterval(playerListInterval);
       };
@@ -106,39 +116,58 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
   useEffect(() => {
     if (game && game.current_board && !completionAcknowledged) {
       const isComplete = isBoardComplete(game.current_board);
-      
+
       if (isComplete && !showCongratulations) {
-        console.log('Game completed! Showing congratulations and notifying others.');
-        
+        console.log(
+          "Game completed! Showing congratulations and notifying others."
+        );
+
         // show congratulations popup locally
         setShowCongratulations(true);
-        
+
         // notify other players via WebSocket
         if (socketState && socketState.isReady()) {
-          socketState.sendMessage(JSON.stringify({
-            type: 'game_complete',
-            player_id: playerId
-          }));
+          socketState.sendMessage(
+            JSON.stringify({
+              type: "game_complete",
+              player_id: playerId,
+            })
+          );
         }
       }
     }
-  }, [game?.current_board, showCongratulations, socketState, playerId, completionAcknowledged]);
+  }, [
+    game?.current_board,
+    showCongratulations,
+    socketState,
+    playerId,
+    completionAcknowledged,
+  ]);
 
   // congrat effect
   useEffect(() => {
-    if (game && game.is_complete && !showCongratulations && !completionAcknowledged) {
+    if (
+      game &&
+      game.is_complete &&
+      !showCongratulations &&
+      !completionAcknowledged
+    ) {
       setShowCongratulations(true);
     }
   }, [game?.is_complete, completionAcknowledged]);
 
   useEffect(() => {
     // if connection status changes to disconnected, attempt to reconnect
-    if (connectionStatus === 'disconnected' && socketState && socketState.reconnect) {
+    if (
+      connectionStatus === "disconnected" &&
+      socketState &&
+      socketState.reconnect
+    ) {
       const reconnectTimer = setTimeout(() => {
-        console.log('Attempting to reconnect...');
+        console.log("Attempting to reconnect...");
         socketState.reconnect();
       }, 2000); // reconnect after 2 seconds
-      
+
       return () => clearTimeout(reconnectTimer);
     }
   }, [connectionStatus, socketState]);
@@ -148,61 +177,134 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
       const handleWebSocketMessage = (event) => {
         const data = JSON.parse(event.data);
         console.log("WebSocket message received in Game:", data);
-        
+
         // handle specific message types if needed
-        if (data.type === 'quick_chat') {
+        if (data.type === "quick_chat") {
           console.log("Quick chat message received:", data);
           // pass to board component via props
         }
       };
-      
-      socket.addEventListener('message', handleWebSocketMessage);
-      
+
+      socket.addEventListener("message", handleWebSocketMessage);
+
       return () => {
-        socket.removeEventListener('message', handleWebSocketMessage);
+        socket.removeEventListener("message", handleWebSocketMessage);
       };
     }
   }, [socket]);
 
+  useEffect(() => {
+    if (socketState && socketState.isReady && socketState.isReady()) {
+      // message handler for cell focus events
+      const handleSocketMessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+
+          if (message.type === "cell_focus") {
+            const { row, column, player_id, player, focus_type } = message;
+            const cellKey = `${row}-${column}`;
+
+            console.log(
+              "FOCUS DEBUG: Received focus event in specific handler:",
+              message
+            );
+            console.log("FOCUS DEBUG: Current cellFocus state:", cellFocus);
+
+            setCellFocus((prev) => {
+              // for 'focus' events, add or update the focus information
+              if (focus_type === "focus") {
+                // create a new object to ensure React detects the state change
+                const newState = { ...prev };
+                newState[cellKey] = {
+                  player_id,
+                  player,
+                  row,
+                  column,
+                  focus_type,
+                  color: player?.color || "#ff5722",
+                  playerName: player?.name || "Player",
+                };
+
+                console.log("FOCUS DEBUG: Updated state will be:", newState);
+                return newState;
+              }
+              // for 'blur' events, remove the focus information
+              else if (focus_type === "blur") {
+                // only remove if the blur is from the same player who set the focus
+                const newState = { ...prev };
+
+                if (
+                  newState[cellKey] &&
+                  newState[cellKey].player_id === player_id
+                ) {
+                  delete newState[cellKey];
+                  console.log("FOCUS DEBUG: Deleting focus for cell:", cellKey);
+                }
+
+                return newState;
+              }
+
+              return prev;
+            });
+          }
+        } catch (error) {
+          console.error("Error processing socket message:", error);
+        }
+      };
+
+      // event listener
+      socketState.addEventListener("message", handleSocketMessage);
+
+      // cleanup
+      return () => {
+        socketState.removeEventListener("message", handleSocketMessage);
+      };
+    }
+  }, [socketState]);
+
   const fetchGameDetails = async () => {
     try {
-      const response = await axios.get(`http://localhost:8000/api/games/${gameId}/`);
+      const response = await axios.get(
+        `http://localhost:8000/api/games/${gameId}/`
+      );
       setGame(response.data);
       setLoading(false);
     } catch (error) {
-      console.error('Error fetching game:', error);
-      setError('Game not found or has expired');
+      console.error("Error fetching game:", error);
+      setError("Game not found or has expired");
       setLoading(false);
     }
   };
 
   const handleJoinGame = async (e) => {
     e.preventDefault();
-    
+
     if (!playerName.trim()) {
-      setErrorMessage('Please enter your name');
+      setErrorMessage("Please enter your name");
       return;
     }
-    
+
     try {
-      const response = await axios.post(`http://localhost:8000/api/games/${gameId}/join/`, {
-        player_name: playerName,
-        player_color: playerColor
-      });
-      
+      const response = await axios.post(
+        `http://localhost:8000/api/games/${gameId}/join/`,
+        {
+          player_name: playerName,
+          player_color: playerColor,
+        }
+      );
+
       // save game data to localStorage
-      localStorage.setItem('gameId', gameId);
-      localStorage.setItem('playerId', response.data.player_id);
-      
+      localStorage.setItem("gameId", gameId);
+      localStorage.setItem("playerId", response.data.player_id);
+
       // set player ID from response
       setPlayerId(response.data.player_id);
-      
+
       // update game data
       setGame(response.data);
-      
     } catch (error) {
-      console.error('Error joining game:', error);
-      setErrorMessage('Failed to join the game');
+      console.error("Error joining game:", error);
+      setErrorMessage("Failed to join the game");
     }
   };
 
@@ -211,90 +313,153 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
     if (socketCleanup) {
       socketCleanup();
     }
-    
+
     // change to secure websocket in production
     const websocketUrl = `ws://localhost:8000/ws/game/${gameId}/`;
-    
+
     const onOpen = () => {
-      setConnectionStatus('connected');
+      setConnectionStatus("connected");
       setTimeout(() => {
         if (socket && socket.readyState === WebSocket.OPEN) {
-          console.log('Announcing player join:', playerId);
-          socket.send(JSON.stringify({
-            type: 'join',
-            player_id: playerId
-          }));
-          
+          console.log("Announcing player join:", playerId);
+          socket.send(
+            JSON.stringify({
+              type: "join",
+              player_id: playerId,
+            })
+          );
+
           // request a fresh player list
-          socket.send(JSON.stringify({
-            type: 'request_player_list'
-          }));
+          socket.send(
+            JSON.stringify({
+              type: "request_player_list",
+            })
+          );
         }
       }, 500);
     };
 
     const onMessage = (e) => {
       const data = JSON.parse(e.data);
-      
-      // skip heartbeat messages as they're handled in the utility
-      if (data.type === 'heartbeat') return;
 
-      console.log('WebSocket message received:', data); // For debugging
-      
-      if (data.type === 'move') {
+      // skip heartbeat messages as they're handled in the utility
+      if (data.type === "heartbeat") return;
+
+      console.log("WebSocket message received:", data); // For debugging
+
+      if (data.type === "move") {
         // update board with new move
         handleRemoteMove(data.move);
-      } else if (data.type === 'join') {
+      } else if (data.type === "join") {
         // handle new player joining
         handlePlayerJoin(data.player);
-        
+
         // when we receive a join message, also request a fresh player list
         if (socketState && socketState.isReady()) {
-          socketState.sendMessage(JSON.stringify({
-            type: 'request_player_list'
-          }));
+          socketState.sendMessage(
+            JSON.stringify({
+              type: "request_player_list",
+            })
+          );
         }
-      } else if (data.type === 'player_list_update') {
+      } else if (data.type === "player_list_update") {
         // handle complete player list update
         updatePlayerList(data.players);
-      } else if (data.type === 'game_complete') {
+      } else if (data.type === "game_complete") {
         // show congratulations popup when another player completes the game
         setShowCongratulations(true);
-      } else if (data.type === 'error') {
+      } else if (data.type === "error") {
         // display error messages from the server
         setErrorMessage(data.message);
         setTimeout(() => setErrorMessage(null), 3000);
-      } else if (data.type === 'quick_chat') {
+      } else if (data.type === "quick_chat") {
         console.log("RECEIVED QUICK CHAT:", data); // debug
-        setChatMessages(prev => {
+        setChatMessages((prev) => {
           // check if this message is already in our list to avoid duplicates
-          const isDuplicate = prev.some(msg => 
-            msg.timestamp === data.timestamp && 
-            msg.player_id === data.player_id &&
-            msg.message === data.message
+          const isDuplicate = prev.some(
+            (msg) =>
+              msg.timestamp === data.timestamp &&
+              msg.player_id === data.player_id &&
+              msg.message === data.message
           );
-          
+
           if (!isDuplicate) {
             console.log("Adding quick chat message to state:", data);
             return [...prev, data];
           }
           return prev;
         });
+      } else if (data.type === "cell_focus") {
+        
+        const { row, column, player_id, player, focus_type } = data;
+        const cellKey = `${row}-${column}`;
+
+        console.log("Received cell_focus in main handler:", data);
+
+        setCellFocus((prev) => {
+          
+          const newState = { ...prev };
+
+          // for 'focus' events, add or update the focus information
+          if (focus_type === "focus") {
+            // hapus fokus player ini di sel manapun sebelum menambahkan yang baru
+            // ini penting untuk mencegah duplikasi fokus dari pemain yang sama
+            Object.keys(newState).forEach((key) => {
+              if (newState[key]?.player_id === player_id) {
+                delete newState[key];
+              }
+            });
+
+            // tambahkan fokus baru
+            newState[cellKey] = {
+              player_id,
+              player,
+              row,
+              column,
+              focus_type,
+              color: player?.color || "#ff5722",
+              playerName: player?.name || "Player",
+            };
+
+            return newState;
+          }
+          // for 'blur' events, remove the focus information
+          else if (focus_type === "blur") {
+            // only remove if the blur is from the same player who set the focus
+            if (
+              newState[cellKey] &&
+              newState[cellKey].player_id === player_id
+            ) {
+              delete newState[cellKey];
+            }
+
+            return newState;
+          }
+
+          return prev;
+        });
       }
     };
 
     const onError = (e) => {
-      console.error('WebSocket error:', e);
-      setConnectionStatus('error');
+      console.error("WebSocket error:", e);
+      setConnectionStatus("error");
     };
-    
+
     const onClose = (e) => {
-      console.log('WebSocket disconnected', e.reason);
-      setConnectionStatus('disconnected');
+      console.log("WebSocket disconnected", e.reason);
+      setConnectionStatus("disconnected");
     };
 
     // set up the websocket with heartbeat
-    const { socket: ws, cleanup, isReady, getConnectionState, sendMessage, reconnect } = setupWebSocketWithHeartbeat(
+    const {
+      socket: ws,
+      cleanup,
+      isReady,
+      getConnectionState,
+      sendMessage,
+      reconnect,
+    } = setupWebSocketWithHeartbeat(
       websocketUrl,
       onOpen,
       onMessage,
@@ -305,54 +470,57 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
     // set all these values separately
     setSocket(ws);
     setSocketCleanup(() => cleanup);
-    
+
     // store all utility functions in socketState
     setSocketState({
       isReady,
       getConnectionState,
       sendMessage,
-      reconnect
+      reconnect,
     });
   };
 
   const handleRemoteMove = (move) => {
     const enhancedMove = {
       ...move,
-      player_id: move.player_id || (move.players && Object.keys(move.players)[0]) || null
+      player_id:
+        move.player_id ||
+        (move.players && Object.keys(move.players)[0]) ||
+        null,
     };
-    
+
     // update game state with the new move
-    setGame(prevGame => {
+    setGame((prevGame) => {
       if (!prevGame) return null;
-      
+
       const newBoard = [...prevGame.current_board];
       newBoard[move.row][move.column] = move.value;
-      
+
       // enhanced move with player_id
       const newMoves = [...(prevGame.moves || []), enhancedMove];
-      
+
       return {
         ...prevGame,
         current_board: newBoard,
-        moves: newMoves
+        moves: newMoves,
       };
     });
   };
 
   const handlePlayerJoin = (player) => {
     // add new player to the game state
-    setGame(prevGame => {
+    setGame((prevGame) => {
       if (!prevGame) return null;
-      
-      const playerExists = prevGame.players.some(p => p.id === player.id);
-      
+
+      const playerExists = prevGame.players.some((p) => p.id === player.id);
+
       if (playerExists) {
         return prevGame;
       }
 
       return {
         ...prevGame,
-        players: [...prevGame.players, player]
+        players: [...prevGame.players, player],
       };
     });
 
@@ -361,24 +529,26 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
   };
 
   const updatePlayerList = (players) => {
-    console.log('Updating player list with:', players);
-    
+    console.log("Updating player list with:", players);
+
     // use a more reliable state update approach
-    setGame(prevGame => {
+    setGame((prevGame) => {
       if (!prevGame) return null;
-      
+
       // deep comparison to check if player list has changed
-      const currentPlayers = JSON.stringify(prevGame.players.map(p => p.id).sort());
-      const newPlayers = JSON.stringify(players.map(p => p.id).sort());
-      
+      const currentPlayers = JSON.stringify(
+        prevGame.players.map((p) => p.id).sort()
+      );
+      const newPlayers = JSON.stringify(players.map((p) => p.id).sort());
+
       if (currentPlayers !== newPlayers) {
-        console.log('Player list changed, updating state');
+        console.log("Player list changed, updating state");
         return {
           ...prevGame,
-          players: players
+          players: players,
         };
       }
-      
+
       return prevGame;
     });
   };
@@ -387,29 +557,29 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
     // create the move message with is_correct flag
     // we pass null for is_correct and let the server handle validation
     const moveMessage = JSON.stringify({
-      type: 'move',
+      type: "move",
       player_id: playerId,
       row: row,
       column: col,
       value: value,
-      is_correct: isCorrect 
+      is_correct: isCorrect,
     });
-    
+
     // use enhanced sendMessage function that handles queuing
     const messageSent = socketState && socketState.sendMessage(moveMessage);
-    
+
     // if connection is down but message was queued, show a less intrusive notification
     if (!messageSent) {
       // only show the message if there isn't already one displayed
       if (!errorMessage) {
         setErrorMessage("Move queued - reconnecting...");
-        
+
         // auto-hide the error after 1.5 seconds
         setTimeout(() => setErrorMessage(null), 1500);
       }
       return;
     }
-    
+
     // clear any previous error if message was sent successfully
     if (errorMessage) {
       setErrorMessage(null);
@@ -421,62 +591,67 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
     if (socketCleanup) {
       socketCleanup();
     }
-    localStorage.removeItem('gameId');
-    localStorage.removeItem('playerId');
-    
+    localStorage.removeItem("gameId");
+    localStorage.removeItem("playerId");
+
     // use provided callback if available, otherwise navigate home
     if (onLeaveGame) {
       onLeaveGame();
     } else {
-      navigate('/');
+      navigate("/");
     }
   };
 
   const broadcastQuickChat = (message) => {
     // socket state checking
-    if (socket && 
-        socket.readyState === WebSocket.OPEN && 
-        socketState && 
-        socketState.isReady && 
-        socketState.isReady()) {
-      
+    if (
+      socket &&
+      socket.readyState === WebSocket.OPEN &&
+      socketState &&
+      socketState.isReady &&
+      socketState.isReady()
+    ) {
       console.log("Broadcasting quick chat via main socket:", message);
       const chatMessage = {
-        type: 'quick_chat',
+        type: "quick_chat",
         player_id: playerId,
         message: message,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
       socket.send(JSON.stringify(chatMessage));
-      
+
       // add to local chatMessages state for immediate feedback
-      setChatMessages(prev => [...prev, chatMessage]);
+      setChatMessages((prev) => [...prev, chatMessage]);
     } else {
-      console.log("Primary socket not ready, trying socketState sendMessage...");
-      
+      console.log(
+        "Primary socket not ready, trying socketState sendMessage..."
+      );
+
       // fall back to socketState's sendMessage function if available
       if (socketState && socketState.sendMessage) {
         const chatMessage = {
-          type: 'quick_chat',
+          type: "quick_chat",
           player_id: playerId,
           message: message,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         };
-        
+
         const success = socketState.sendMessage(JSON.stringify(chatMessage));
-        
+
         if (success) {
           console.log("Message sent via socketState.sendMessage");
           // add to local state for immediate feedback
-          setChatMessages(prev => [...prev, chatMessage]);
+          setChatMessages((prev) => [...prev, chatMessage]);
         } else {
           console.error("Failed to send message via socketState.sendMessage");
-          
+
           // add to local state to provide user feedback
-          setChatMessages(prev => [...prev, chatMessage]);
-          
+          setChatMessages((prev) => [...prev, chatMessage]);
+
           // show error message briefly
-          setErrorMessage("Message not sent to other players - reconnecting...");
+          setErrorMessage(
+            "Message not sent to other players - reconnecting..."
+          );
           setTimeout(() => setErrorMessage(null), 3000);
         }
       } else {
@@ -490,7 +665,7 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
   const handleCloseCongratulations = () => {
     setShowCongratulations(false);
     setCompletionAcknowledged(true);
-    localStorage.setItem(`game_${gameId}_completed_acknowledged`, 'true');
+    localStorage.setItem(`game_${gameId}_completed_acknowledged`, "true");
   };
 
   if (loading) {
@@ -499,22 +674,29 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
 
   if (error) {
     return (
-      <div style={{ maxWidth: '500px', margin: '0 auto', padding: '20px', textAlign: 'center' }}>
+      <div
+        style={{
+          maxWidth: "500px",
+          margin: "0 auto",
+          padding: "20px",
+          textAlign: "center",
+        }}
+      >
         <div className="error">{error}</div>
         <button
-          onClick={() => { 
-            localStorage.removeItem('gameId');
-            localStorage.removeItem('playerId');
-            navigate('/');
+          onClick={() => {
+            localStorage.removeItem("gameId");
+            localStorage.removeItem("playerId");
+            navigate("/");
           }}
           style={{
-            backgroundColor: '#3498db',
-            color: 'white',
-            padding: '10px 15px',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            marginTop: '20px'
+            backgroundColor: "#3498db",
+            color: "white",
+            padding: "10px 15px",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+            marginTop: "20px",
           }}
         >
           Go Home
@@ -526,11 +708,14 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
   // if user hasn't joined yet, show join form
   if (!playerId) {
     return (
-      <div style={{ maxWidth: '500px', margin: '0 auto', padding: '20px' }}>
+      <div style={{ maxWidth: "500px", margin: "0 auto", padding: "20px" }}>
         <h2>Join Sudoku Game</h2>
         <form onSubmit={handleJoinGame}>
-          <div style={{ marginBottom: '20px' }}>
-            <label htmlFor="playerName" style={{ display: 'block', marginBottom: '5px' }}>
+          <div style={{ marginBottom: "20px" }}>
+            <label
+              htmlFor="playerName"
+              style={{ display: "block", marginBottom: "5px" }}
+            >
               Your Name:
             </label>
             <input
@@ -538,43 +723,43 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
               id="playerName"
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
-              style={{ width: '100%', padding: '8px' }}
+              style={{ width: "100%", padding: "8px" }}
               required
             />
           </div>
-          
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '5px' }}>
+
+          <div style={{ marginBottom: "20px" }}>
+            <label style={{ display: "block", marginBottom: "5px" }}>
               Choose your color:
             </label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-              {colorOptions.map(color => (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+              {colorOptions.map((color) => (
                 <div
                   key={color}
                   onClick={() => setPlayerColor(color)}
                   style={{
-                    width: '30px',
-                    height: '30px',
+                    width: "30px",
+                    height: "30px",
                     backgroundColor: color,
-                    borderRadius: '50%',
-                    cursor: 'pointer',
-                    border: color === playerColor ? '2px solid black' : 'none'
+                    borderRadius: "50%",
+                    cursor: "pointer",
+                    border: color === playerColor ? "2px solid black" : "none",
                   }}
                 ></div>
               ))}
             </div>
           </div>
-          
-          <button 
-            type="submit" 
+
+          <button
+            type="submit"
             style={{
-              backgroundColor: '#4CAF50',
-              color: 'white',
-              padding: '10px 15px',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '16px'
+              backgroundColor: "#4CAF50",
+              color: "white",
+              padding: "10px 15px",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontSize: "16px",
             }}
           >
             Join Game
@@ -585,63 +770,85 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
   }
 
   // find current player in players list
-  const currentPlayer = game.players.find(p => p.id === playerId) || {};
+  const currentPlayer = game.players.find((p) => p.id === playerId) || {};
 
   return (
-    <div style={{ textAlign: 'center' }}>
+    <div style={{ textAlign: "center" }}>
       <h2>Multiplayer Sudoku</h2>
-      
+
       {/* Connection status indicator */}
-      <div 
-        style={{ 
-          display: 'inline-block',
-          margin: '10px 0',
-          padding: '5px 10px',
-          borderRadius: '5px',
-          backgroundColor: connectionStatus === 'connected' ? '#2ecc71' : connectionStatus === 'disconnected' ? '#e74c3c' : '#f39c12',
-          color: 'white',
-          fontSize: '14px'
+      <div
+        style={{
+          display: "inline-block",
+          margin: "10px 0",
+          padding: "5px 10px",
+          borderRadius: "5px",
+          backgroundColor:
+            connectionStatus === "connected"
+              ? "#2ecc71"
+              : connectionStatus === "disconnected"
+              ? "#e74c3c"
+              : "#f39c12",
+          color: "white",
+          fontSize: "14px",
         }}
       >
-        {connectionStatus === 'connected' ? 'Connected' : connectionStatus === 'disconnected' ? 'Reconnecting...' : 'Connection Error'}
+        {connectionStatus === "connected"
+          ? "Connected"
+          : connectionStatus === "disconnected"
+          ? "Reconnecting..."
+          : "Connection Error"}
       </div>
-      
-      <GameControls 
-        difficulty={game.difficulty} 
-        playerName={currentPlayer.name || 'Player'} 
+
+      <GameControls
+        difficulty={game.difficulty}
+        playerName={currentPlayer.name || "Player"}
         isHost={currentPlayer.is_host || false}
       />
-      
+
       {/* Players list */}
-      <div style={{ margin: '20px 0' }}>
+      <div style={{ margin: "20px 0" }}>
         <h3>Players:</h3>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          {game.players.map(player => (
-            <div 
-              key={player.id} 
-              style={{ 
-                padding: '5px 10px', 
-                backgroundColor: player.color || '#3498db', 
-                color: '#fff',
-                borderRadius: '5px',
-                fontWeight: player.id === playerId ? 'bold' : 'normal'
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            gap: "10px",
+            flexWrap: "wrap",
+          }}
+        >
+          {game.players.map((player) => (
+            <div
+              key={player.id}
+              style={{
+                padding: "5px 10px",
+                backgroundColor: player.color || "#3498db",
+                color: "#fff",
+                borderRadius: "5px",
+                fontWeight: player.id === playerId ? "bold" : "normal",
               }}
             >
-              {player.name} {player.is_host ? '(Host)' : ''}
+              {player.name} {player.is_host ? "(Host)" : ""}
             </div>
           ))}
         </div>
+        <p style={{ fontSize: "14px", color: "#666", margin: "10px 0 0" }}>
+          <b>Tip:</b> Anda dapat melihat posisi pemain lain pada papan Sudoku
+          dengan batas berwarna di sekitar sel yang mereka fokuskan.
+        </p>
       </div>
-      
+
       {/* Error message display */}
       {errorMessage && (
-        <div style={{ 
-          margin: '10px 0', 
-          padding: '10px', 
-          backgroundColor: '#f8d7da',
-          color: '#721c24',
-          borderRadius: '4px'
-        }}>
+        <div
+          style={{
+            margin: "10px 0",
+            padding: "10px",
+            backgroundColor: "#f8d7da",
+            color: "#721c24",
+            borderRadius: "4px",
+          }}
+        >
           {errorMessage}
         </div>
       )}
@@ -657,27 +864,29 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
         socketState={socketState}
         broadcastQuickChat={broadcastQuickChat}
         chatMessages={chatMessages}
+        cellFocus={cellFocus}
+        setCellFocus={setCellFocus}
       />
-      
+
       {/* Always show the invite link */}
       <Invite gameId={game.id} />
-      
-      <div style={{ marginTop: '20px' }}>
-        <button 
-          onClick={handleLeaveGame} 
+
+      <div style={{ marginTop: "20px" }}>
+        <button
+          onClick={handleLeaveGame}
           style={{
-            backgroundColor: '#e74c3c',
-            color: 'white',
-            padding: '8px 15px',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
+            backgroundColor: "#e74c3c",
+            color: "white",
+            padding: "8px 15px",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
           }}
         >
           Leave Game
         </button>
       </div>
-      
+
       {/* Congratulations popup */}
       <CongratulationsPopup
         show={showCongratulations}

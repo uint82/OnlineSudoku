@@ -82,7 +82,6 @@
   color: #721c24;
 }
 
-
 .player-indicator {
   width: 10px;
   height: 10px;
@@ -233,11 +232,122 @@
   }
 }
 
-@keyframes fadeOut {
-  from {
-    opacity: 1;
+.cell-with-focus {
+  position: relative;
+  z-index: 5;
+}
+
+.focus-indicator {
+  animation: pulse-border 1.5s infinite;
+}
+
+@keyframes pulse-border {
+  0% {
+    opacity: 0.8;
+    box-shadow: 0 0 5px 1px rgba(255, 255, 255, 0.7);
   }
-  to {
-    opacity: 0;
+  50% {
+    opacity: 0.6;
+    box-shadow: 0 0 15px 3px rgba(255, 255, 255, 0.5);
+    transform: scale(1.03);
   }
+  100% {
+    opacity: 0.8;
+    box-shadow: 0 0 5px 1px rgba(255, 255, 255, 0.7);
+  }
+}
+
+.focus-tooltip {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.cell-with-focus:hover .focus-tooltip {
+  opacity: 1;
+}
+
+/* Player Positions Panel Styles */
+.player-positions-panel {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  margin: 10px 0 20px;
+  padding: 12px;
+  max-width: 250px;
+  align-self: flex-start;
+}
+
+.player-positions-panel h4 {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  color: #333;
+  text-align: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eee;
+}
+
+.player-position-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.player-position-item {
+  display: flex;
+  align-items: center;
+  padding: 5px 0;
+  margin-bottom: 8px;
+}
+
+.player-position-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.player-position-name {
+  font-weight: bold;
+  font-size: 14px;
+  margin-right: 5px;
+}
+
+.player-position-coords {
+  font-size: 12px;
+  color: #666;
+  margin-left: auto;
+}
+
+.no-active-players {
+  color: #999;
+  font-size: 14px;
+  text-align: center;
+  font-style: italic;
+  margin: 5px 0;
+}
+
+/* Focus Related Animations */
+@keyframes pulse-border {
+  0% {
+    opacity: 0.8;
+    box-shadow: 0 0 5px 1px rgba(255, 255, 255, 0.7);
+  }
+  50% {
+    opacity: 0.6;
+    box-shadow: 0 0 15px 3px rgba(255, 255, 255, 0.5);
+    transform: scale(1.03);
+  }
+  100% {
+    opacity: 0.8;
+    box-shadow: 0 0 5px 1px rgba(255, 255, 255, 0.7);
+  }
+}
+
+.focus-tooltip {
+  transition: opacity 0.3s;
+  opacity: 0;
+}
+
+.cell-with-focus:hover .focus-tooltip {
+  opacity: 1;
 }
