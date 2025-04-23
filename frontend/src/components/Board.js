@@ -214,7 +214,7 @@ const Board = ({
       return;
     }
 
-    // If not in localStorage, check the moves array
+    // if not in localStorage, check the moves array
     if (moves && moves.length > 0) {
       const playerHasUsedHint = moves.some(
         (move) =>
@@ -394,8 +394,14 @@ const Board = ({
         setHighlightedNumber(currentBoard[row][col]);
       }
 
-      // clear selected cell when clicking on a locked cell
-      setSelectedCell(null);
+      // tetap pilih sel dan kirim event fokus meskipun sel terkunci
+      // untuk konsistensi indikator fokus
+      setSelectedCell({ row, col });
+
+      // kirim fokus event setelah sel dipilih
+      setTimeout(() => {
+        handleCellFocus(row, col);
+      }, 10);
     } else {
       // for empty cells, reset the highlighting
       if (currentBoard[row][col] === 0) {
@@ -405,7 +411,7 @@ const Board = ({
         // to avoid race conditions
         setSelectedCell({ row, col });
 
-        // Send focus event - with a slight delay to ensure state is updated
+        // send focus event 
         setTimeout(() => {
           handleCellFocus(row, col);
         }, 10);
@@ -420,7 +426,7 @@ const Board = ({
         // allow selecting the cell regardless of who placed it
         setSelectedCell({ row, col });
 
-        // Send focus event - with a slight delay to ensure state is updated
+        // send focus event 
         setTimeout(() => {
           handleCellFocus(row, col);
         }, 10);
