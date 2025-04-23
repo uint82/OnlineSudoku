@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from "react";
-import "./Cell.css"; 
+import "./Cell.css";
 
 const Cell = ({
   value,
@@ -23,7 +23,7 @@ const Cell = ({
   const cellRef = useRef(null);
   const isLocked = isInitial || isCorrect;
 
-  // for debugging 
+  // for debugging
   useEffect(() => {
     if (focusInfo) {
       console.log(`Cell ${row}-${col} has focus from player:`, focusInfo);
@@ -79,8 +79,8 @@ const Cell = ({
       : playerColor || "#666",
     transition: "background-color 0.2s",
     position: "relative",
-    outline: "none", 
-    
+    outline: "none",
+
     ...(focusInfo && {
       boxShadow: `0 0 0 2px ${focusInfo.color || "#ff5722"}`,
     }),
@@ -202,48 +202,6 @@ const Cell = ({
     );
   };
 
-  // render tooltip showing which player is focusing on this cell
-  const renderFocusTooltip = () => {
-    if (!focusInfo) return null;
-
-    return (
-      <div
-        className="focus-tooltip"
-        style={{
-          position: "absolute",
-          bottom: "130%",
-          left: "50%",
-          transform: "translateX(-50%)",
-          backgroundColor: focusInfo.color || "#666",
-          color: "#fff",
-          padding: "3px 8px",
-          borderRadius: "4px",
-          fontSize: "12px",
-          whiteSpace: "nowrap",
-          zIndex: 12,
-          pointerEvents: "none",
-          opacity: 0.9, 
-          boxShadow: "0 2px 5px rgba(0,0,0,0.2)",
-        }}
-      >
-        {focusInfo.playerName || "Player"}
-        <div
-          style={{
-            position: "absolute",
-            bottom: "-5px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            width: "0",
-            height: "0",
-            borderLeft: "5px solid transparent",
-            borderRight: "5px solid transparent",
-            borderTop: `5px solid ${focusInfo.color || "#666"}`,
-          }}
-        />
-      </div>
-    );
-  };
-
   return (
     <div
       ref={cellRef}
@@ -256,7 +214,6 @@ const Cell = ({
     >
       {value > 0 ? value : renderPencilNotes()}
       {renderFocusIndicator()}
-      {focusInfo && isSelected ? null : focusInfo && renderFocusTooltip()}
     </div>
   );
 };

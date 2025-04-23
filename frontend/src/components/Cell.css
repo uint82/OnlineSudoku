@@ -13,17 +13,6 @@
   z-index: 4;
 }
 
-.focus-tooltip {
-  opacity: 0;
-  transition: opacity 0.3s;
-  pointer-events: none;
-  z-index: 10;
-}
-
-.cell-with-focus:hover .focus-tooltip {
-  opacity: 1 !important;
-}
-
 @keyframes focus-pulse {
   0% {
     opacity: 0.8;
