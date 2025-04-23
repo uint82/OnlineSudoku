@@ -2,9 +2,9 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import Board from "./Board";
-import Invite from "./Invite";
 import GameControls from "./GameControls";
 import CongratulationsPopup from "./Popup";
+import Navbar from "./Navbar";
 import { setupWebSocketWithHeartbeat } from "../utils/websocketUtils";
 import { isBoardComplete } from "../utils/sudokuUtils";
 
@@ -28,6 +28,7 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
   const [completionAcknowledged, setCompletionAcknowledged] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
   const [cellFocus, setCellFocus] = useState({});
+  const [playerContributions, setPlayerContributions] = useState({});
 
   // join form
   const [playerName, setPlayerName] = useState("");
@@ -44,6 +45,31 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
     "#d35400",
     "#34495e",
   ];
+
+  // kalkulasi kontribusi pemain berdasarkan gerakan
+  useEffect(() => {
+    if (game && game.moves) {
+      const contributions = {};
+
+      // hitung kontribusi untuk setiap pemain
+      game.moves.forEach((move) => {
+        const movePlayerId = move.player_id || (move.player && move.player.id);
+        if (movePlayerId) {
+          if (!contributions[movePlayerId]) {
+            contributions[movePlayerId] = 0;
+          }
+          // tambahkan poin untuk langkah benar
+          if (move.is_correct === true) {
+            contributions[movePlayerId] += 10;
+          }
+          // tambahkan juga poin untuk setiap gerakan, terlepas dari kebenarannya
+          contributions[movePlayerId] += 1;
+        }
+      });
+
+      setPlayerContributions(contributions);
+    }
+  }, [game?.moves]);
 
   useEffect(() => {
     // check if user is already part of this game or a different game
@@ -390,14 +416,12 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
           return prev;
         });
       } else if (data.type === "cell_focus") {
-        
         const { row, column, player_id, player, focus_type } = data;
         const cellKey = `${row}-${column}`;
 
         console.log("Received cell_focus in main handler:", data);
 
         setCellFocus((prev) => {
-          
           const newState = { ...prev };
 
           // for 'focus' events, add or update the focus information
@@ -591,6 +615,18 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
     if (socketCleanup) {
       socketCleanup();
     }
+
+    // kirim notifikasi ke server bahwa pengguna meninggalkan game
+    if (socketState && socketState.isReady && socketState.isReady()) {
+      socketState.sendMessage(
+        JSON.stringify({
+          type: "leave_game",
+          player_id: playerId,
+          game_id: gameId,
+        })
+      );
+    }
+
     localStorage.removeItem("gameId");
     localStorage.removeItem("playerId");
 
@@ -666,6 +702,17 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
     setShowCongratulations(false);
     setCompletionAcknowledged(true);
     localStorage.setItem(`game_${gameId}_completed_acknowledged`, "true");
+
+    // kirim notifikasi ke server bahwa game sudah selesai
+    if (socketState && socketState.isReady && socketState.isReady()) {
+      socketState.sendMessage(
+        JSON.stringify({
+          type: "game_completed",
+          player_id: playerId,
+          game_id: gameId,
+        })
+      );
+    }
   };
 
   if (loading) {
@@ -772,70 +819,116 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
   // find current player in players list
   const currentPlayer = game.players.find((p) => p.id === playerId) || {};
 
+  // sortir pemain berdasarkan kontribusi
+  const sortedPlayers = [...game.players].sort((a, b) => {
+    const contributionA = playerContributions[a.id] || 0;
+    const contributionB = playerContributions[b.id] || 0;
+    return contributionB - contributionA; // Urutkan dari kontribusi tertinggi
+  });
+
   return (
     <div style={{ textAlign: "center" }}>
-      <h2>Multiplayer Sudoku</h2>
-
-      {/* Connection status indicator */}
-      <div
-        style={{
-          display: "inline-block",
-          margin: "10px 0",
-          padding: "5px 10px",
-          borderRadius: "5px",
-          backgroundColor:
-            connectionStatus === "connected"
-              ? "#2ecc71"
-              : connectionStatus === "disconnected"
-              ? "#e74c3c"
-              : "#f39c12",
-          color: "white",
-          fontSize: "14px",
-        }}
-      >
-        {connectionStatus === "connected"
-          ? "Connected"
-          : connectionStatus === "disconnected"
-          ? "Reconnecting..."
-          : "Connection Error"}
-      </div>
-
-      <GameControls
-        difficulty={game.difficulty}
+      {/* Navbar */}
+      <Navbar
         playerName={currentPlayer.name || "Player"}
-        isHost={currentPlayer.is_host || false}
+        playerId={playerId}
+        gameId={gameId}
+        onLeaveGame={handleLeaveGame}
+        playerColor={currentPlayer.color}
       />
 
-      {/* Players list */}
-      <div style={{ margin: "20px 0" }}>
-        <h3>Players:</h3>
+      {/* Enhanced Players list - Horizontal Layout */}
+      <div style={{ margin: "0 0 15px 0" }}>
         <div
+          className="player-list"
           style={{
             display: "flex",
-            justifyContent: "center",
-            gap: "10px",
+            flexDirection: "row",
             flexWrap: "wrap",
+            justifyContent: "center",
+            gap: "8px",
+            maxWidth: "800px",
+            margin: "0 auto",
           }}
         >
-          {game.players.map((player) => (
-            <div
-              key={player.id}
-              style={{
-                padding: "5px 10px",
-                backgroundColor: player.color || "#3498db",
-                color: "#fff",
-                borderRadius: "5px",
-                fontWeight: player.id === playerId ? "bold" : "normal",
-              }}
-            >
-              {player.name} {player.is_host ? "(Host)" : ""}
-            </div>
-          ))}
+          {sortedPlayers.slice(0, 3).map((player, index) => {
+            const contribution = playerContributions[player.id] || 0;
+            return (
+              <div
+                key={player.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "5px 10px",
+                  borderRadius: "4px",
+                  backgroundColor:
+                    player.id === playerId ? "#f0f0f0" : "#f8f9fa",
+                  border: "1px solid #ddd",
+                  fontSize: "0.9rem",
+                  gap: "6px",
+                  minWidth: "120px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: "18px",
+                    height: "18px",
+                    backgroundColor: "#eee",
+                    borderRadius: "50%",
+                    fontSize: "0.75rem",
+                    fontWeight: "bold",
+                  }}
+                >
+                  {index + 1}
+                </div>
+                <div
+                  style={{
+                    width: "12px",
+                    height: "12px",
+                    backgroundColor: player.color || "#3498db",
+                    borderRadius: "50%",
+                    marginRight: "2px",
+                  }}
+                ></div>
+                <div
+                  style={{
+                    fontWeight: player.id === playerId ? "bold" : "normal",
+                  }}
+                >
+                  {player.name}
+                </div>
+                <div
+                  style={{
+                    backgroundColor: "#e8f5e9",
+                    color: "#2e7d32",
+                    fontSize: "0.75rem",
+                    padding: "1px 5px",
+                    borderRadius: "10px",
+                    marginLeft: "auto",
+                  }}
+                >
+                  {contribution}pt
+                </div>
+                {player.is_host && (
+                  <div
+                    style={{
+                      backgroundColor: "#9C27B0",
+                      color: "white",
+                      fontSize: "0.65rem",
+                      padding: "1px 4px",
+                      borderRadius: "4px",
+                    }}
+                  >
+                    Host
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
-        <p style={{ fontSize: "14px", color: "#666", margin: "10px 0 0" }}>
-          <b>Tip:</b> Anda dapat melihat posisi pemain lain pada papan Sudoku
-          dengan batas berwarna di sekitar sel yang mereka fokuskan.
-        </p>
       </div>
 
       {/* Error message display */}
@@ -868,24 +961,13 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
         setCellFocus={setCellFocus}
       />
 
-      {/* Always show the invite link */}
-      <Invite gameId={game.id} />
-
-      <div style={{ marginTop: "20px" }}>
-        <button
-          onClick={handleLeaveGame}
-          style={{
-            backgroundColor: "#e74c3c",
-            color: "white",
-            padding: "8px 15px",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-          }}
-        >
-          Leave Game
-        </button>
-      </div>
+      {/* Game info moved below board */}
+      <GameControls
+        difficulty={game.difficulty}
+        playerName={currentPlayer.name || "Player"}
+        isHost={currentPlayer.is_host || false}
+        gameId={gameId}
+      />
 
       {/* Congratulations popup */}
       <CongratulationsPopup

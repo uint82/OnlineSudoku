@@ -13,31 +13,31 @@
   gap: 1px;
   border: 2px solid #333;
   background-color: #333;
-  margin-bottom: 20px;
+  margin-bottom: 5px;
 }
 
 .number-pad {
   display: flex;
   justify-content: center;
-  margin: 10px 0;
 }
 
 .number-pad button {
   width: 40px;
   height: 40px;
-  margin: 0 5px;
+  margin: 0 0px;
   font-size: 16px;
+  border: none;
   cursor: pointer;
+  background-color: white;
 }
 
 .number-pad button.pencil-mode {
-  background-color: #e7f3ff;
+  background-color: white;
 }
 
 .control-buttons {
   display: flex;
   justify-content: center;
-  margin: 15px 0;
   gap: 20px;
 }
 
@@ -82,12 +82,7 @@
   color: #721c24;
 }
 
-.player-indicator {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  margin-right: 5px;
-}
+
 
 .instructions {
   margin-top: 10px;

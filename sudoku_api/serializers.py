@@ -111,3 +111,19 @@ class GameSerializer(serializers.ModelSerializer):
     class Meta:
         model = Game
         fields = ['id', 'initial_board', 'current_board', 'difficulty', 'created_at', 'last_activity', 'players', 'moves', 'is_complete', 'completed_at', 'completed_by']
+
+class GameInfoSerializer(serializers.ModelSerializer):
+    """Serializer for listing available games with minimal information"""
+    player_count = serializers.SerializerMethodField()
+    host_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Game
+        fields = ['id', 'difficulty', 'created_at', 'player_count', 'host_name', 'is_complete']
+    
+    def get_player_count(self, obj):
+        return obj.players.count()
+    
+    def get_host_name(self, obj):
+        host = obj.players.filter(is_host=True).first()
+        return host.name if host else "Unknown"

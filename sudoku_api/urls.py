@@ -8,4 +8,5 @@ router.register(r'moves', views.MoveViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('games/available/', views.AvailableGamesView.as_view(), name='available-games'),
 ]

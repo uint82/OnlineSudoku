@@ -63,7 +63,6 @@ footer {
   grid-template-rows: repeat(9, 40px);
   gap: 0;
   width: 360px;
-  margin: 0 auto 20px auto;
   border: 2px solid #333;
 }
 
@@ -77,7 +76,7 @@ footer {
 .number-pad {
   display: flex;
   justify-content: center;
-  margin-top: 20px;
+  margin-top: 10px;
 }
 
 /* Optional: Add hover effect to cells */

@@ -27,7 +27,6 @@ const Board = ({
   const [showQuickChat, setShowQuickChat] = useState(false);
   const [quickChatPosition, setQuickChatPosition] = useState({ x: 0, y: 0 });
   const [temporaryMessages, setTemporaryMessages] = useState([]);
-  const [showPlayerPositions, setShowPlayerPositions] = useState(true);
 
   const quickChatOptions = {
     messages: [
@@ -59,7 +58,7 @@ const Board = ({
     });
 
     // kika kita memiliki sel yang dipilih, pastikan fokus kita tetap terdaftar di state
-    if (selectedCell && showPlayerPositions) {
+    if (selectedCell) {
       const cellKey = `${selectedCell.row}-${selectedCell.col}`;
       const existingFocus = cellFocus[cellKey];
 
@@ -125,15 +124,7 @@ const Board = ({
         }
       }
     }
-  }, [
-    cellFocus,
-    selectedCell,
-    showPlayerPositions,
-    playerId,
-    players,
-    socketState,
-    setCellFocus,
-  ]);
+  }, [cellFocus, selectedCell, playerId, players, socketState, setCellFocus]);
 
   // tambahkan useEffect untuk menangani pesan fokus dari server
   useEffect(() => {
@@ -234,7 +225,7 @@ const Board = ({
   useEffect(() => {
     // create a timer to refresh the player's focus position
     // this ensures that if messages are dropped, the focus state is still maintained
-    if (selectedCell && showPlayerPositions) {
+    if (selectedCell) {
       const focusRefreshInterval = setInterval(() => {
         if (socketState && socketState.isReady && socketState.isReady()) {
           const currentPlayer = players.find((p) => p.id === playerId);
@@ -247,7 +238,7 @@ const Board = ({
 
       return () => clearInterval(focusRefreshInterval);
     }
-  }, [selectedCell, socketState, playerId, players, showPlayerPositions]);
+  }, [selectedCell, socketState, playerId, players]);
 
   // clear all focus information when component unmounts
   useEffect(() => {
@@ -411,7 +402,7 @@ const Board = ({
         // to avoid race conditions
         setSelectedCell({ row, col });
 
-        // send focus event 
+        // send focus event
         setTimeout(() => {
           handleCellFocus(row, col);
         }, 10);
@@ -426,7 +417,7 @@ const Board = ({
         // allow selecting the cell regardless of who placed it
         setSelectedCell({ row, col });
 
-        // send focus event 
+        // send focus event
         setTimeout(() => {
           handleCellFocus(row, col);
         }, 10);
@@ -435,7 +426,7 @@ const Board = ({
   };
 
   const handleCellFocus = (row, col, isRefresh = false) => {
-    if (!playerId || !showPlayerPositions) return;
+    if (!playerId) return;
 
     // cek apakah kita sudah memiliki fokus di sel ini dari pemain yang sama
     const cellKey = `${row}-${col}`;
@@ -758,20 +749,6 @@ const Board = ({
     setPencilMode(!pencilMode);
   };
 
-  const togglePlayerPositions = () => {
-    setShowPlayerPositions(!showPlayerPositions);
-
-    // If turning off, send blur events for our current selection
-    if (showPlayerPositions && selectedCell) {
-      handleCellBlur(selectedCell.row, selectedCell.col);
-    }
-
-    // If turning on and we have a selected cell, send a focus event
-    if (!showPlayerPositions && selectedCell) {
-      handleCellFocus(selectedCell.row, selectedCell.col);
-    }
-  };
-
   const toggleQuickChat = (event) => {
     if (event) {
       // position the panel near the button
@@ -882,23 +859,6 @@ const Board = ({
           <span>Chat</span>
         </div>
 
-        {/* Player Positions Toggle */}
-        <div
-          className={`control-button ${showPlayerPositions ? "active" : ""}`}
-        >
-          <button
-            onClick={togglePlayerPositions}
-            title={
-              showPlayerPositions
-                ? "Hide Player Positions"
-                : "Show Player Positions"
-            }
-          >
-            <UserIcon size={24} />
-          </button>
-          <span>{showPlayerPositions ? "Hide Players" : "Show Players"}</span>
-        </div>
-
         {/* Eraser Button */}
         <div className="control-button eraser-button">
           <button onClick={() => handleNumberSelect(0)} title="Erase">
@@ -994,55 +954,6 @@ const Board = ({
     );
   };
 
-  // render current player positions panel
-  const renderPlayerPositionsPanel = () => {
-    if (
-      !showPlayerPositions ||
-      !cellFocus ||
-      Object.keys(cellFocus).length === 0
-    ) {
-      return null;
-    }
-
-    const activePlayers = {};
-
-    // group by player id to avoid duplicates
-    Object.values(cellFocus).forEach((focus) => {
-      if (focus.player_id !== playerId) {
-        activePlayers[focus.player_id] = {
-          id: focus.player_id,
-          name: focus.player?.name || focus.playerName || "Player",
-          color: focus.player?.color || focus.color || "#666",
-          position: `${focus.row + 1},${focus.column + 1}`,
-        };
-      }
-    });
-
-    return (
-      <div className="player-positions-panel">
-        <h4>Player Positions</h4>
-        {Object.keys(activePlayers).length > 0 ? (
-          <ul className="player-position-list">
-            {Object.values(activePlayers).map((player) => (
-              <li key={player.id} className="player-position-item">
-                <div
-                  className="player-position-color"
-                  style={{ backgroundColor: player.color }}
-                ></div>
-                <span className="player-position-name">{player.name}</span>
-                <span className="player-position-coords">
-                  ({player.position})
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="no-active-players">No other active players</p>
-        )}
-      </div>
-    );
-  };
-
   return (
     <div className="board-container">
       <div className="sudoku-grid">
@@ -1062,7 +973,6 @@ const Board = ({
             // properly format focus info from cellFocus state
             let focusInfo = null;
             if (
-              showPlayerPositions &&
               cellFocus &&
               cellFocus[cellKey] &&
               cellFocus[cellKey].focus_type === "focus"
@@ -1114,20 +1024,10 @@ const Board = ({
         )}
       </div>
 
-      {renderPlayerPositionsPanel()}
       {renderControlButtons()}
       {renderNumberPad()}
       {renderQuickChatPanel()}
       {renderTemporaryMessages()}
-
-      <div className="instructions">
-        <p>Click on a number to highlight all matching numbers on the board</p>
-        <p>Use the pencil tool to add notes to cells</p>
-        <p>Correct answers will be locked and displayed in green</p>
-        <p>Answers from hints are shown in yellow (1 hint per player)</p>
-        <p>Any player can fix incorrect answers (shown in red)</p>
-        <p>Use the player icon to toggle seeing other players' positions</p>
-      </div>
     </div>
   );
 };

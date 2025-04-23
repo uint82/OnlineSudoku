@@ -4,6 +4,7 @@ from channels.db import database_sync_to_async
 from .models import Game, Player, Move
 import asyncio
 import logging
+from django.utils import timezone
 
 """
 consumers.py - WebSocket handler for real-time Sudoku gameplay
@@ -84,8 +85,7 @@ class SudokuConsumer(AsyncWebsocketConsumer):
     
     def get_timestamp(self):
         """Return current ISO timestamp for the heartbeat"""
-        from datetime import datetime
-        return datetime.now().isoformat()
+        return timezone.now().isoformat()
     
     async def receive(self, text_data):
         try:
@@ -197,6 +197,61 @@ class SudokuConsumer(AsyncWebsocketConsumer):
                         'type': 'error',
                         'message': str(ve)
                     }))
+                    
+            elif message_type == 'game_completed':
+                # penanganan eksplisit ketika game sudah selesai
+                player_id = data.get('player_id')
+                game_id = data.get('game_id')
+                
+                if not player_id or not game_id:
+                    await self.send(text_data=json.dumps({
+                        'type': 'error',
+                        'message': 'Player ID and Game ID are required'
+                    }))
+                    return
+                
+                # mark game as completed in database
+                await self.mark_game_as_completed(game_id, player_id)
+                
+                # broadcast to all players
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        'type': 'broadcast_game_completed',
+                        'player_id': player_id,
+                        'game_id': game_id
+                    }
+                )
+                
+            elif message_type == 'leave_game':
+                # penanganan ketika pemain meninggalkan game
+                player_id = data.get('player_id')
+                game_id = data.get('game_id')
+                
+                if not player_id or not game_id:
+                    await self.send(text_data=json.dumps({
+                        'type': 'error',
+                        'message': 'Player ID and Game ID are required'
+                    }))
+                    return
+                
+                # hapus pemain dari game
+                remaining_players = await self.remove_player_from_game(game_id, player_id)
+                
+                # jika tidak ada pemain tersisa, hapus game
+                if remaining_players == 0:
+                    await self.delete_game(game_id)
+                else:
+                    # broadcast ke pemain lain bahwa seseorang telah keluar
+                    all_players = await self.get_all_players()
+                    await self.channel_layer.group_send(
+                        self.room_group_name,
+                        {
+                            'type': 'broadcast_player_left',
+                            'player_id': player_id,
+                            'players': all_players
+                        }
+                    )
 
             elif message_type == 'cell_focus':
                 player_id = data.get('player_id')
@@ -398,6 +453,30 @@ class SudokuConsumer(AsyncWebsocketConsumer):
             'focus_type': event['focus_type']
         }))
 
+    async def broadcast_game_completed(self, event):
+        """Broadcast when a game is explicitly marked as completed"""
+        player_id = event.get('player_id')
+        game_id = event.get('game_id')
+        
+        await self.send(text_data=json.dumps({
+            'type': 'game_completed',
+            'player_id': player_id,
+            'game_id': game_id,
+            'timestamp': self.get_timestamp()
+        }))
+        
+    async def broadcast_player_left(self, event):
+        """Broadcast when a player leaves the game"""
+        player_id = event.get('player_id')
+        players = event.get('players', [])
+        
+        await self.send(text_data=json.dumps({
+            'type': 'player_left',
+            'player_id': player_id,
+            'players': players,
+            'timestamp': self.get_timestamp()
+        }))
+
     @database_sync_to_async
     def check_game_completion(self, game_id):
         """
@@ -427,8 +506,6 @@ class SudokuConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def mark_game_complete(self, player_id):
         """Mark the game as complete in the database"""
-        from django.utils import timezone
-        
         try:
             player = Player.objects.get(id=player_id)
             game = Game.objects.get(id=self.game_id)
@@ -448,6 +525,47 @@ class SudokuConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             logger.error(f"Error marking game as complete: {e}", exc_info=True)
             raise ValueError(f"Error marking game as complete: {str(e)}")
+
+    @database_sync_to_async
+    def mark_game_as_completed(self, game_id, player_id):
+        """Mark game as completed and store completion time and player"""
+        try:
+            game = Game.objects.get(id=game_id)
+            player = Player.objects.get(id=player_id)
+            
+            game.is_complete = True
+            game.completed_at = timezone.now()
+            game.completed_by = player
+            game.save()
+            
+            return True
+        except (Game.DoesNotExist, Player.DoesNotExist):
+            return False
+            
+    @database_sync_to_async
+    def remove_player_from_game(self, game_id, player_id):
+        """Remove player from game and return count of remaining players"""
+        try:
+            game = Game.objects.get(id=game_id)
+            player = Player.objects.filter(id=player_id, game=game).first()
+            
+            if player:
+                player.delete()
+                
+            # return count of remaining players
+            return Player.objects.filter(game=game).count()
+        except Game.DoesNotExist:
+            return 0
+            
+    @database_sync_to_async
+    def delete_game(self, game_id):
+        """Delete a game completely"""
+        try:
+            game = Game.objects.get(id=game_id)
+            game.delete()
+            return True
+        except Game.DoesNotExist:
+            return False
 
     @database_sync_to_async
     def save_move(self, player_id, row, column, value):
