@@ -93,10 +93,10 @@ const Game = ({
           setPlayerName(savedPlayerName);
         }
       }
-      // Removed prompt here - will show when joining instead
+      
     }
 
-    // Pastikan URL menggunakan format /game/:gameId
+    // pastikan URL menggunakan format /game/:gameId
     if (gameId && window.location.pathname === "/") {
       navigate(`/game/${gameId}`, { replace: true });
     }
