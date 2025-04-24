@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 import os
 from dotenv import load_dotenv
+import dj_database_url
 
 from pathlib import Path
 
@@ -44,6 +45,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'channels',
     'corsheaders',
+
+    'django_crontab',
 ]
 
 MIDDLEWARE = [
@@ -103,10 +106,10 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=os.environ.get('DATABASE_URL'),
+        conn_max_age=600
+    )
 }
 
 
@@ -153,6 +156,11 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+CRONJOBS = [
+    # Run the cleanup job every day at 3:00 AM
+    ('* */1 * * *', 'django.core.management.call_command', ['cleanup_inactive_games', '--hours=1']),
+]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

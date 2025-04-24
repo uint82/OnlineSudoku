@@ -110,7 +110,7 @@ class GameSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Game
-        fields = ['id', 'initial_board', 'current_board', 'difficulty', 'created_at', 'last_activity', 'players', 'moves', 'is_complete', 'completed_at', 'completed_by']
+        fields = ['id', 'initial_board', 'current_board', 'difficulty', 'created_at', 'last_activity', 'players', 'moves', 'is_complete', 'completed_at', 'completed_by', 'room_name']
 
 class GameInfoSerializer(serializers.ModelSerializer):
     """Serializer for listing available games with minimal information"""
@@ -119,7 +119,7 @@ class GameInfoSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Game
-        fields = ['id', 'difficulty', 'created_at', 'player_count', 'host_name', 'is_complete']
+        fields = ['id', 'difficulty', 'created_at', 'player_count', 'host_name', 'is_complete', 'room_name']
     
     def get_player_count(self, obj):
         return obj.players.count()

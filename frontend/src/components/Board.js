@@ -17,6 +17,7 @@ const Board = ({
   chatMessages,
   cellFocus,
   setCellFocus,
+  isDarkMode,
 }) => {
   const [selectedCell, setSelectedCell] = useState(null);
   const [highlightedNumber, setHighlightedNumber] = useState(null);
@@ -184,9 +185,28 @@ const Board = ({
     const hintCells = {};
 
     moves?.forEach((move) => {
+      // cek flag is_hint yang eksplisit
       if (move.is_hint === true) {
         const cellKey = `${move.row}-${move.column}`;
         hintCells[cellKey] = true;
+        console.log(`Detected hint cell at ${cellKey} from is_hint flag`);
+        return;
+      }
+
+      
+      const cellKey = `${move.row}-${move.column}`;
+      const hintKey = `game_${gameId}_hint_cell_${cellKey}`;
+
+      if (localStorage.getItem(hintKey) === "true") {
+        hintCells[cellKey] = true;
+        console.log(`Detected hint cell at ${cellKey} from localStorage`);
+        return;
+      }
+
+      // simpan sel hint yang baru ditemukan untuk persistensi
+      if (move.is_hint === true) {
+        localStorage.setItem(hintKey, "true");
+        console.log(`Saved hint cell at ${cellKey} to localStorage`);
       }
     });
 
@@ -581,9 +601,34 @@ const Board = ({
         return;
       }
 
+      const cellKey = `${row}-${col}`;
+      const hasPencilNotes =
+        pencilNotes[cellKey] && pencilNotes[cellKey].length > 0;
+
+      // handle eraser button (number === 0) - works regardless of pencil mode
+      if (number === 0) {
+        // clear actual value if present and editable
+        if (
+          currentBoard[row][col] !== 0 &&
+          (hasError || cellData.playerId === playerId)
+        ) {
+          onMakeMove(row, col, 0, null);
+        }
+
+        // clear pencil notes if present
+        if (hasPencilNotes) {
+          const updatedNotes = { ...pencilNotes };
+          delete updatedNotes[cellKey];
+          setPencilNotes(updatedNotes);
+        }
+
+        // always clear selection after erasing
+        setSelectedCell(null);
+        return;
+      }
+
+      // handle pencil mode (for numbers 1-9)
       if (pencilMode) {
-        // handle pencil mode
-        const cellKey = `${row}-${col}`;
         const currentNotes = pencilNotes[cellKey] || [];
 
         // toggle the number in pencil notes
@@ -595,30 +640,10 @@ const Board = ({
           ...pencilNotes,
           [cellKey]: newNotes,
         });
-      } else if (number === 0) {
-        // check if there are pencil notes to clear
-        const cellKey = `${row}-${col}`;
-        const hasPencilNotes =
-          pencilNotes[cellKey] && pencilNotes[cellKey].length > 0;
 
-        // Allow erasing if:
-        // 1. The cell has pencil notes, OR
-        // 2. The cell has an error, OR
-        // 3. The cell was placed by the current player
-        if (hasPencilNotes || hasError || cellData.playerId === playerId) {
-          // only make a move if there's an actual value to clear
-          if (currentBoard[row][col] !== 0) {
-            onMakeMove(row, col, 0, null);
-          }
-
-          // clear pencil notes regardless
-          if (hasPencilNotes) {
-            const updatedNotes = { ...pencilNotes };
-            delete updatedNotes[cellKey];
-            setPencilNotes(updatedNotes);
-          }
-        }
+        // don't clear selection in pencil mode to allow multiple notes
       } else {
+        // normal mode - input actual numbers
         // check if the move is valid according to Sudoku rules
         const isValid = isValidSudokuMove(currentBoard, row, col, number);
 
@@ -626,27 +651,25 @@ const Board = ({
         onMakeMove(row, col, number, isValid);
 
         // clear pencil notes for this cell when placing a number
-        const cellKey = `${row}-${col}`;
-        if (pencilNotes[cellKey]) {
+        if (hasPencilNotes) {
           const updatedNotes = { ...pencilNotes };
           delete updatedNotes[cellKey];
           setPencilNotes(updatedNotes);
         }
-      }
 
-      // only clear selected cell if not in pencil mode
-      if (!pencilMode) {
+        // clear selection after placing a number
         setSelectedCell(null);
       }
     }
 
-    // toggle highlighting when clicking a number (except for X/0)
-    if (!pencilMode && number !== 0) {
+    // toggle highlighting when clicking a number (except for eraser/0)
+    if (number !== 0) {
       if (highlightedNumber === number) {
         setHighlightedNumber(null);
       } else {
         setHighlightedNumber(number);
-        // clear selected cell when highlighting a number
+
+        // only clear selected cell when highlighting in normal mode
         if (!pencilMode) {
           setSelectedCell(null);
         }
@@ -845,6 +868,10 @@ const Board = ({
             onClick={handleHint}
             title={hintUsed ? "Hint already used" : "Get Hint"}
             disabled={isRequestingHint || hintUsed}
+            style={{
+              opacity: hintUsed ? (isDarkMode ? "0.6" : "0.5") : "1",
+              cursor: "pointer",
+            }}
           >
             <EyeOff size={24} />
           </button>
@@ -954,8 +981,19 @@ const Board = ({
     );
   };
 
+  useEffect(() => {
+    // ketika array moves berubah, simpan info hint cells ke localStorage
+    moves?.forEach((move) => {
+      if (move.is_hint === true) {
+        const cellKey = `${move.row}-${move.column}`;
+        const hintKey = `game_${gameId}_hint_cell_${cellKey}`;
+        localStorage.setItem(hintKey, "true");
+      }
+    });
+  }, [moves, gameId]);
+
   return (
-    <div className="board-container">
+    <div className={`board-container ${isDarkMode ? "dark-mode" : ""}`}>
       <div className="sudoku-grid">
         {currentBoard.map((row, rowIndex) =>
           row.map((cell, colIndex) => {
@@ -1018,6 +1056,7 @@ const Board = ({
                 onFocus={() => handleCellFocus(rowIndex, colIndex)}
                 onBlur={() => handleCellBlur(rowIndex, colIndex)}
                 playerId={playerId}
+                isDarkMode={isDarkMode}
               />
             );
           })

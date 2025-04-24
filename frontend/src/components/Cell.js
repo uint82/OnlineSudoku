@@ -19,6 +19,7 @@ const Cell = ({
   onFocus,
   onBlur,
   playerId,
+  isDarkMode,
 }) => {
   const cellRef = useRef(null);
   const isLocked = isInitial || isCorrect;
@@ -48,6 +49,7 @@ const Cell = ({
     isCorrect ? "correct-cell" : "",
     isOwner ? "owner-cell" : "",
     focusInfo ? "cell-with-focus" : "",
+    isDarkMode ? "dark-mode" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -58,25 +60,47 @@ const Cell = ({
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    border: "1px solid #ccc",
+    border: isDarkMode ? "1px solid #444" : "1px solid #ccc",
     fontWeight: isInitial || isCorrect ? "bold" : "normal",
     backgroundColor: hasError
-      ? "#ffcccc"
+      ? isDarkMode
+        ? "#582828"
+        : "#ffcccc"
       : isSelected
-      ? "#6FA6CD"
+      ? isDarkMode
+        ? "#345575"
+        : "#6FA6CD"
       : isHighlighted
-      ? "#6FA6CD"
+      ? isDarkMode
+        ? "#345575"
+        : "#6FA6CD"
+      : isHint
+      ? isDarkMode
+        ? "#555555"
+        : "#fff3cd"
       : isCorrect
-      ? "#d4edda"
+      ? isDarkMode
+        ? "#214d2a"
+        : "#d4edda"
+      : isDarkMode
+      ? "#2a2a2a"
       : "white",
     cursor: isLocked ? "default" : "pointer",
     color: hasError
       ? "red"
       : isInitial
-      ? "black"
+      ? isDarkMode
+        ? "#ffffff"
+        : "black"
+      : isHint
+      ? isDarkMode
+        ? "#bbbbbb"
+        : "#856404"
       : isCorrect
-      ? "#28a745"
-      : playerColor || "#666",
+      ? isDarkMode
+        ? "#4caf50"
+        : "#28a745"
+      : playerColor || (isDarkMode ? "#aaa" : "#666"),
     transition: "background-color 0.2s",
     position: "relative",
     outline: "none",
@@ -88,16 +112,16 @@ const Cell = ({
 
   // add border styling to create the 3x3 boxes
   if (row % 3 === 0) {
-    cellStyle.borderTop = "2px solid #333";
+    cellStyle.borderTop = isDarkMode ? "2px solid #555" : "2px solid #333";
   }
   if (col % 3 === 0) {
-    cellStyle.borderLeft = "2px solid #333";
+    cellStyle.borderLeft = isDarkMode ? "2px solid #555" : "2px solid #333";
   }
   if (row === 8) {
-    cellStyle.borderBottom = "2px solid #333";
+    cellStyle.borderBottom = isDarkMode ? "2px solid #555" : "2px solid #333";
   }
   if (col === 8) {
-    cellStyle.borderRight = "2px solid #333";
+    cellStyle.borderRight = isDarkMode ? "2px solid #555" : "2px solid #333";
   }
 
   const handleClick = () => {
@@ -119,7 +143,7 @@ const Cell = ({
       width: "100%",
       height: "100%",
       fontSize: "10px",
-      color: "#666",
+      color: isDarkMode ? "#ffffff" : "#666",
     };
 
     return (

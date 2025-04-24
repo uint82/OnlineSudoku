@@ -8,7 +8,13 @@ import Navbar from "./Navbar";
 import { setupWebSocketWithHeartbeat } from "../utils/websocketUtils";
 import { isBoardComplete } from "../utils/sudokuUtils";
 
-const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
+const Game = ({
+  gameIdProp,
+  playerIdProp,
+  onLeaveGame,
+  isDarkMode,
+  toggleDarkMode,
+}) => {
   const params = useParams();
   const navigate = useNavigate();
 
@@ -32,18 +38,19 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
 
   // join form
   const [playerName, setPlayerName] = useState("");
-  const [playerColor, setPlayerColor] = useState("#e74c3c");
 
-  // colors for player selection
+  // warna untuk pemain (akan dipilih otomatis)
   const colorOptions = [
-    "#e74c3c",
-    "#3498db",
-    "#2ecc71",
-    "#f39c12",
-    "#9b59b6",
-    "#1abc9c",
-    "#d35400",
-    "#34495e",
+    "#4169E1", // royal blue
+    "#50C878", // emerald green
+    "#DC143C", // crimson
+    "#FFBF00", // amber
+    "#8A2BE2", // purple
+    "#008080", // teal
+    "#FF7F50", // coral
+    "#708090", // slate Gray
+    "#FF00FF", // magenta
+    "#228B22", // forest Green
   ];
 
   // kalkulasi kontribusi pemain berdasarkan gerakan
@@ -75,28 +82,25 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
     // check if user is already part of this game or a different game
     const savedGameId = localStorage.getItem("gameId");
     const savedPlayerId = localStorage.getItem("playerId");
+    const savedPlayerName = localStorage.getItem("playerName");
+    const savedToken = localStorage.getItem("playerToken");
 
     if (savedGameId && savedPlayerId) {
       if (savedGameId === gameId) {
         // if user is already part of this game
         setPlayerId(savedPlayerId);
-      } else {
-        // user is part of another game - confirm before switching
-        const confirmSwitch = window.confirm(
-          "You're already in another game. Do you want to leave that game and join this one?"
-        );
-
-        if (confirmSwitch) {
-          // clear existing game data
-          localStorage.removeItem("gameId");
-          localStorage.removeItem("playerId");
-        } else {
-          // redirect back to their current game
-          navigate("/");
-          return;
+        if (savedPlayerName) {
+          setPlayerName(savedPlayerName);
         }
       }
+      // Removed prompt here - will show when joining instead
     }
+
+    // Pastikan URL menggunakan format /game/:gameId
+    if (gameId && window.location.pathname === "/") {
+      navigate(`/game/${gameId}`, { replace: true });
+    }
+
     const hasAcknowledged =
       localStorage.getItem(`game_${gameId}_completed_acknowledged`) === "true";
     if (hasAcknowledged) {
@@ -310,27 +314,96 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
       return;
     }
 
+    // check if already in another game
+    const savedGameId = localStorage.getItem("gameId");
+    const savedPlayerId = localStorage.getItem("playerId");
+
+    if (savedGameId && savedPlayerId && savedGameId !== gameId) {
+      // user is part of another game - confirm before switching
+      const confirmSwitch = window.confirm(
+        "You're already in another game. Do you want to leave that game and join this one?"
+      );
+
+      if (!confirmSwitch) {
+        // user canceled, don't proceed with join
+        return;
+      }
+
+      // user confirmed, clear existing game data
+      localStorage.removeItem("gameId");
+      localStorage.removeItem("playerId");
+      localStorage.removeItem("playerName");
+      localStorage.removeItem("playerToken");
+    }
+
+    // check if username token exists for this game
+    const savedToken = localStorage.getItem(`token_${playerName.trim()}`);
+
+    // select a random color from colorOptions
+    const randomColor =
+      colorOptions[Math.floor(Math.random() * colorOptions.length)];
+
     try {
+      // kirim request dengan token jika ada
       const response = await axios.post(
         `http://localhost:8000/api/games/${gameId}/join/`,
         {
           player_name: playerName,
-          player_color: playerColor,
+          player_color: randomColor,
+          token: savedToken, // send token if available
         }
       );
 
-      // save game data to localStorage
+      // save game & player data to localStorage
       localStorage.setItem("gameId", gameId);
       localStorage.setItem("playerId", response.data.player_id);
+      localStorage.setItem("playerName", playerName);
+      localStorage.setItem("playerToken", response.data.token);
+
+      // also save token with username as key for future searches
+      localStorage.setItem(`token_${playerName}`, response.data.token);
+
+      // hapus pesan error jika ada
+      setErrorMessage(null);
 
       // set player ID from response
       setPlayerId(response.data.player_id);
 
       // update game data
       setGame(response.data);
+
+      // update URL dari /join/id ke /game/id jika kita berada di URL join
+      if (window.location.pathname.includes("/join/")) {
+        navigate(`/game/${gameId}`, { replace: true });
+      }
     } catch (error) {
       console.error("Error joining game:", error);
-      setErrorMessage("Failed to join the game");
+
+      // cek apakah error karena username sudah digunakan
+      if (
+        error.response &&
+        error.response.data &&
+        error.response.status === 400 &&
+        error.response.data.error &&
+        error.response.data.error.includes("already in use")
+      ) {
+        setErrorMessage(
+          "Username already in use in this game. If this is your username, make sure you're using the same device or browser where you first joined."
+        );
+      } else if (
+        error.response &&
+        error.response.data &&
+        error.response.data.error
+      ) {
+        setErrorMessage(error.response.data.error);
+      } else {
+        setErrorMessage("Failed to join the game");
+      }
+
+      // atur timer untuk menghilangkan pesan error setelah beberapa detik
+      setTimeout(() => {
+        setErrorMessage(null);
+      }, 8000);
     }
   };
 
@@ -627,14 +700,27 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
       );
     }
 
+    // Hapus data game dari localStorage
     localStorage.removeItem("gameId");
     localStorage.removeItem("playerId");
+    localStorage.removeItem("playerName");
+    localStorage.removeItem("playerToken");
+
+    // Hapus semua state lokal game
+    setGame(null);
+    setPlayerId(null);
+    setSocket(null);
+    setSocketState(null);
+    setChatMessages([]);
+    setCellFocus({});
+    setPlayerContributions({});
 
     // use provided callback if available, otherwise navigate home
     if (onLeaveGame) {
       onLeaveGame();
     } else {
-      navigate("/");
+      // Navigasi ke homepage
+      navigate("/", { replace: true });
     }
   };
 
@@ -757,43 +843,69 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
     return (
       <div style={{ maxWidth: "500px", margin: "0 auto", padding: "20px" }}>
         <h2>Join Sudoku Game</h2>
+
+        {errorMessage && (
+          <div
+            style={{
+              backgroundColor: "#FFEBEE",
+              color: "#D32F2F",
+              padding: "12px 16px",
+              borderRadius: "4px",
+              marginBottom: "20px",
+              border: "1px solid #FFCDD2",
+              fontSize: "14px",
+              fontWeight: errorMessage.includes("already in use")
+                ? "bold"
+                : "normal",
+            }}
+          >
+            {errorMessage}
+          </div>
+        )}
+
         <form onSubmit={handleJoinGame}>
           <div style={{ marginBottom: "20px" }}>
             <label
               htmlFor="playerName"
-              style={{ display: "block", marginBottom: "5px" }}
+              style={{
+                display: "block",
+                marginBottom: "5px",
+                color: isDarkMode ? "#e0e0e0" : "inherit",
+              }}
             >
-              Your Name:
+              Your Username:
             </label>
             <input
               type="text"
               id="playerName"
               value={playerName}
-              onChange={(e) => setPlayerName(e.target.value)}
-              style={{ width: "100%", padding: "8px" }}
+              onChange={(e) => {
+                setPlayerName(e.target.value);
+                // hapus pesan error saat user mengetik
+                if (errorMessage) setErrorMessage(null);
+              }}
+              style={{
+                width: "100%",
+                padding: "8px",
+                backgroundColor: isDarkMode ? "#333" : "white",
+                color: isDarkMode ? "#e0e0e0" : "inherit",
+                border:
+                  errorMessage && errorMessage.includes("already in use")
+                    ? "1px solid #D32F2F"
+                    : isDarkMode
+                    ? "1px solid #555"
+                    : "1px solid #ccc",
+              }}
               required
             />
-          </div>
-
-          <div style={{ marginBottom: "20px" }}>
-            <label style={{ display: "block", marginBottom: "5px" }}>
-              Choose your color:
-            </label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
-              {colorOptions.map((color) => (
-                <div
-                  key={color}
-                  onClick={() => setPlayerColor(color)}
-                  style={{
-                    width: "30px",
-                    height: "30px",
-                    backgroundColor: color,
-                    borderRadius: "50%",
-                    cursor: "pointer",
-                    border: color === playerColor ? "2px solid black" : "none",
-                  }}
-                ></div>
-              ))}
+            <div
+              style={{
+                fontSize: "12px",
+                color: isDarkMode ? "#aaa" : "#666",
+                marginTop: "5px",
+              }}
+            >
+              Use the same username each time to easily rejoin your games later
             </div>
           </div>
 
@@ -835,6 +947,8 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
         gameId={gameId}
         onLeaveGame={handleLeaveGame}
         playerColor={currentPlayer.color}
+        isDarkMode={isDarkMode}
+        toggleDarkMode={toggleDarkMode}
       />
 
       {/* Enhanced Players list - Horizontal Layout */}
@@ -862,11 +976,18 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
                   padding: "5px 10px",
                   borderRadius: "4px",
                   backgroundColor:
-                    player.id === playerId ? "#f0f0f0" : "#f8f9fa",
-                  border: "1px solid #ddd",
+                    player.id === playerId
+                      ? isDarkMode
+                        ? "#3a3a3a"
+                        : "#f0f0f0"
+                      : isDarkMode
+                      ? "#2a2a2a"
+                      : "#f8f9fa",
+                  border: isDarkMode ? "1px solid #444" : "1px solid #ddd",
                   fontSize: "0.9rem",
                   gap: "6px",
                   minWidth: "120px",
+                  color: isDarkMode ? "#e0e0e0" : "inherit",
                 }}
               >
                 <div
@@ -876,7 +997,8 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
                     justifyContent: "center",
                     width: "18px",
                     height: "18px",
-                    backgroundColor: "#eee",
+                    backgroundColor: isDarkMode ? "#444" : "#eee",
+                    color: isDarkMode ? "#ddd" : "inherit",
                     borderRadius: "50%",
                     fontSize: "0.75rem",
                     fontWeight: "bold",
@@ -902,8 +1024,8 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
                 </div>
                 <div
                   style={{
-                    backgroundColor: "#e8f5e9",
-                    color: "#2e7d32",
+                    backgroundColor: isDarkMode ? "#1b3a26" : "#e8f5e9",
+                    color: isDarkMode ? "#4caf50" : "#2e7d32",
                     fontSize: "0.75rem",
                     padding: "1px 5px",
                     borderRadius: "10px",
@@ -937,8 +1059,8 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
           style={{
             margin: "10px 0",
             padding: "10px",
-            backgroundColor: "#f8d7da",
-            color: "#721c24",
+            backgroundColor: isDarkMode ? "#4d2c2c" : "#f8d7da",
+            color: isDarkMode ? "#f5b6bc" : "#721c24",
             borderRadius: "4px",
           }}
         >
@@ -959,6 +1081,7 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
         chatMessages={chatMessages}
         cellFocus={cellFocus}
         setCellFocus={setCellFocus}
+        isDarkMode={isDarkMode}
       />
 
       {/* Game info moved below board */}
@@ -967,6 +1090,7 @@ const Game = ({ gameIdProp, playerIdProp, onLeaveGame }) => {
         playerName={currentPlayer.name || "Player"}
         isHost={currentPlayer.is_host || false}
         gameId={gameId}
+        isDarkMode={isDarkMode}
       />
 
       {/* Congratulations popup */}

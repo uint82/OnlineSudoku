@@ -2,7 +2,13 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { Copy, Check } from "lucide-react";
 
-const GameControls = ({ difficulty, playerName, isHost, gameId }) => {
+const GameControls = ({
+  difficulty,
+  playerName,
+  isHost,
+  gameId,
+  isDarkMode,
+}) => {
   const [qrCode, setQrCode] = useState("");
   const [shareUrl, setShareUrl] = useState("");
   const [showQrCode, setShowQrCode] = useState(false);
@@ -48,9 +54,13 @@ const GameControls = ({ difficulty, playerName, isHost, gameId }) => {
           maxWidth: "600px",
           margin: "0 auto",
           padding: "15px",
-          backgroundColor: "#f8f9fa",
+          backgroundColor: isDarkMode ? "#2c2c2c" : "#f8f9fa",
+          color: isDarkMode ? "#e0e0e0" : "inherit",
           borderRadius: "5px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          boxShadow: isDarkMode
+            ? "0 1px 3px rgba(0,0,0,0.3)"
+            : "0 1px 3px rgba(0,0,0,0.1)",
+          flexWrap: "wrap",
         }}
       >
         <div style={{ display: "flex", alignItems: "center" }}>
@@ -109,20 +119,35 @@ const GameControls = ({ difficulty, playerName, isHost, gameId }) => {
           style={{
             margin: "15px auto",
             padding: "15px",
-            backgroundColor: "white",
+            backgroundColor: isDarkMode ? "#2c2c2c" : "white",
+            color: isDarkMode ? "#e0e0e0" : "inherit",
             borderRadius: "5px",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+            boxShadow: isDarkMode
+              ? "0 1px 3px rgba(0,0,0,0.3)"
+              : "0 1px 3px rgba(0,0,0,0.1)",
             maxWidth: "250px",
           }}
         >
-          <div>
+          <div
+            style={{
+              backgroundColor: isDarkMode ? "#ffffff" : "transparent",
+              borderRadius: "4px",
+              padding: "10px",
+            }}
+          >
             <img
               src={qrCode}
               alt="QR Code"
               style={{ width: "150px", height: "150px", margin: "0 auto" }}
             />
           </div>
-          <p style={{ margin: "10px 0 5px", fontSize: "14px", color: "#666" }}>
+          <p
+            style={{
+              margin: "10px 0 5px",
+              fontSize: "14px",
+              color: isDarkMode ? "#aaa" : "#666",
+            }}
+          >
             Scan or Copy link to join the game
           </p>
           <div
@@ -158,11 +183,11 @@ const GameControls = ({ difficulty, playerName, isHost, gameId }) => {
             style={{
               fontSize: "12px",
               padding: "5px",
-              backgroundColor: "#f5f5f5",
+              backgroundColor: isDarkMode ? "#1a1a1a" : "#f5f5f5",
               borderRadius: "3px",
               wordBreak: "break-all",
               margin: "10px 0 0",
-              color: "#666",
+              color: isDarkMode ? "#bbb" : "#666",
             }}
           >
             {shareUrl}

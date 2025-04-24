@@ -1,8 +1,24 @@
 import React, { useState, useRef, useEffect } from "react";
-import { UserIcon, LinkIcon, LogOut, ChevronDown, Menu } from "lucide-react";
+import {
+  UserIcon,
+  LinkIcon,
+  LogOut,
+  ChevronDown,
+  Menu,
+  Moon,
+  Sun,
+} from "lucide-react";
 import axios from "axios";
 
-const Navbar = ({ playerName, playerId, gameId, onLeaveGame, playerColor }) => {
+const Navbar = ({
+  playerName,
+  playerId,
+  gameId,
+  onLeaveGame,
+  playerColor,
+  isDarkMode,
+  toggleDarkMode,
+}) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
   const [copied, setCopied] = useState(false);
@@ -51,6 +67,12 @@ const Navbar = ({ playerName, playerId, gameId, onLeaveGame, playerColor }) => {
     setShowDropdown(!showDropdown);
   };
 
+  const handleToggleDarkMode = () => {
+    if (toggleDarkMode) {
+      toggleDarkMode();
+    }
+  };
+
   return (
     <div
       style={{
@@ -58,9 +80,11 @@ const Navbar = ({ playerName, playerId, gameId, onLeaveGame, playerColor }) => {
         justifyContent: "space-between",
         alignItems: "center",
         padding: "12px 20px",
-        backgroundColor: "#2c3e50",
+        backgroundColor: isDarkMode ? "#1a1a1a" : "#2c3e50",
         color: "white",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+        boxShadow: isDarkMode
+          ? "0 2px 4px rgba(0,0,0,0.3)"
+          : "0 2px 4px rgba(0,0,0,0.1)",
         position: "relative",
         zIndex: 1000,
         marginBottom: "15px",
@@ -117,18 +141,20 @@ const Navbar = ({ playerName, playerId, gameId, onLeaveGame, playerColor }) => {
               position: "absolute",
               right: 0,
               top: "calc(100% + 5px)",
-              backgroundColor: "white",
+              backgroundColor: isDarkMode ? "#2c2c2c" : "white",
               borderRadius: "4px",
-              boxShadow: "0 2px 10px rgba(0,0,0,0.2)",
+              boxShadow: isDarkMode
+                ? "0 2px 10px rgba(0,0,0,0.5)"
+                : "0 2px 10px rgba(0,0,0,0.2)",
               width: "220px",
-              color: "#333",
+              color: isDarkMode ? "#e0e0e0" : "#333",
               overflow: "hidden",
             }}
           >
             <div
               style={{
                 padding: "12px 16px",
-                borderBottom: "1px solid #eee",
+                borderBottom: isDarkMode ? "1px solid #444" : "1px solid #eee",
               }}
             >
               <div
@@ -167,7 +193,7 @@ const Navbar = ({ playerName, playerId, gameId, onLeaveGame, playerColor }) => {
                     <div
                       style={{
                         fontSize: "0.8rem",
-                        color: "#666",
+                        color: isDarkMode ? "#aaa" : "#666",
                         lineHeight: "1",
                         textAlign: "left",
                       }}
@@ -180,6 +206,36 @@ const Navbar = ({ playerName, playerId, gameId, onLeaveGame, playerColor }) => {
             </div>
 
             <div style={{ padding: "8px 0" }}>
+              {/* Dark Mode Toggle */}
+              <button
+                className="dark-mode-toggle"
+                onClick={handleToggleDarkMode}
+                style={{
+                  color: isDarkMode ? "#e0e0e0" : "#333",
+                }}
+              >
+                {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
+                <span style={{ marginLeft: "10px" }}>
+                  {isDarkMode ? "Mode Terang" : "Mode Gelap"}
+                </span>
+                <div
+                  className="toggle-track"
+                  style={{
+                    marginLeft: "auto",
+                    backgroundColor: isDarkMode ? "#007bff" : "#ccc",
+                  }}
+                >
+                  <div
+                    className="toggle-thumb"
+                    style={{
+                      transform: isDarkMode
+                        ? "translateX(20px)"
+                        : "translateX(0)",
+                    }}
+                  />
+                </div>
+              </button>
+
               <button
                 onClick={copyToClipboard}
                 style={{
@@ -193,7 +249,7 @@ const Navbar = ({ playerName, playerId, gameId, onLeaveGame, playerColor }) => {
                   padding: "10px 16px",
                   fontSize: "0.9rem",
                   cursor: "pointer",
-                  color: "#333",
+                  color: isDarkMode ? "#e0e0e0" : "#333",
                 }}
               >
                 <LinkIcon size={16} />

@@ -7,7 +7,13 @@
  * @param {Function} onClose - Callback when connection closes
  * @returns {Object} - Methods to control the WebSocket connection
  */
-export const setupWebSocketWithHeartbeat = (url, onOpen, onMessage, onError, onClose) => {
+export const setupWebSocketWithHeartbeat = (
+  url,
+  onOpen,
+  onMessage,
+  onError,
+  onClose
+) => {
   let socket = null;
   let reconnectTimer = null;
   let heartbeatTimer = null;
@@ -17,7 +23,7 @@ export const setupWebSocketWithHeartbeat = (url, onOpen, onMessage, onError, onC
   let isCleaningUp = false;
   let messageQueue = [];
   let lastMessageTime = 0;
-  
+
   // connection state tracking
   let connectionState = {
     isConnected: false,
@@ -55,18 +61,24 @@ export const setupWebSocketWithHeartbeat = (url, onOpen, onMessage, onError, onC
    * @param {number} code - close code
    * @param {string} reason - close reason
    */
-  const safeCloseSocket = (socketToClose, code = 1000, reason = "Normal closure") => {
+  const safeCloseSocket = (
+    socketToClose,
+    code = 1000,
+    reason = "Normal closure"
+  ) => {
     if (!socketToClose) return;
-    
+
     // remove all listeners to prevent callbacks
     socketToClose.onopen = null;
     socketToClose.onmessage = null;
     socketToClose.onerror = null;
     socketToClose.onclose = null;
-    
+
     // only close if not already closed/closing
-    if (socketToClose.readyState !== WebSocket.CLOSED && 
-        socketToClose.readyState !== WebSocket.CLOSING) {
+    if (
+      socketToClose.readyState !== WebSocket.CLOSED &&
+      socketToClose.readyState !== WebSocket.CLOSING
+    ) {
       try {
         socketToClose.close(code, reason);
       } catch (e) {
@@ -82,15 +94,17 @@ export const setupWebSocketWithHeartbeat = (url, onOpen, onMessage, onError, onC
     if (heartbeatTimer) {
       clearInterval(heartbeatTimer);
     }
-    
+
     // every 30 seconds
     heartbeatTimer = setInterval(() => {
       if (socket && socket.readyState === WebSocket.OPEN) {
         console.log("Sending heartbeat");
-        sendRaw(JSON.stringify({
-          type: 'heartbeat',  // 'heartbeat'
-          timestamp: new Date().toISOString()
-        }));
+        sendRaw(
+          JSON.stringify({
+            type: "heartbeat", // 'heartbeat'
+            timestamp: new Date().toISOString(),
+          })
+        );
       }
     }, 30000);
   };
@@ -102,11 +116,12 @@ export const setupWebSocketWithHeartbeat = (url, onOpen, onMessage, onError, onC
     if (connectionMonitorTimer) {
       clearInterval(connectionMonitorTimer);
     }
-    
+
     // check connection every 15 seconds
     connectionMonitorTimer = setInterval(() => {
-      if (isCleaningUp || !socket || socket.readyState !== WebSocket.OPEN) return;
-      
+      if (isCleaningUp || !socket || socket.readyState !== WebSocket.OPEN)
+        return;
+
       const now = Date.now();
       // if no message received for 45 seconds
       if (now - lastMessageTime > 45000) {
@@ -127,32 +142,36 @@ export const setupWebSocketWithHeartbeat = (url, onOpen, onMessage, onError, onC
       console.log("Cannot connect while cleaning up");
       return;
     }
-    
+
     // throttle connection attempts
     const now = Date.now();
-    if (connectionState.lastAttempt && (now - connectionState.lastAttempt < 1000)) {
+    if (
+      connectionState.lastAttempt &&
+      now - connectionState.lastAttempt < 1000
+    ) {
       console.log("Throttling connection attempts - too frequent");
       return;
     }
 
     // don't connect if already connecting or connected
-    if (isConnecting || (socket && socket.readyState === WebSocket.OPEN)) return;
-    
+    if (isConnecting || (socket && socket.readyState === WebSocket.OPEN))
+      return;
+
     isConnecting = true;
     connectionState.lastAttempt = Date.now();
     console.log(`Attempting to connect to ${url}`);
-    
+
     // clear any previous connection timeout
     if (connectionTimeout) {
       clearTimeout(connectionTimeout);
     }
-    
+
     // close previous socket if it exists
     if (socket) {
       safeCloseSocket(socket);
       socket = null;
     }
-    
+
     try {
       socket = new WebSocket(url);
 
@@ -164,16 +183,16 @@ export const setupWebSocketWithHeartbeat = (url, onOpen, onMessage, onError, onC
           socket = null; // clear reference first
           safeCloseSocket(tempSocket);
           isConnecting = false;
-          
+
           if (!isCleaningUp) {
             connect();
           }
         }
       }, 10000);
-      
+
       socket.onopen = () => {
         if (isCleaningUp) return;
-        
+
         clearTimeout(connectionTimeout);
         connectionTimeout = null;
         console.log("WebSocket connected successfully");
@@ -182,36 +201,38 @@ export const setupWebSocketWithHeartbeat = (url, onOpen, onMessage, onError, onC
         connectionState.reconnectAttempts = 0;
         connectionState.backoffMs = 1000;
         lastMessageTime = Date.now();
-        
+
         // process queued messages
         processQueue();
-        
+
         // start monitoring
         startHeartbeat();
         startConnectionMonitoring();
-        
+
         if (onOpen) onOpen();
       };
 
       socket.onmessage = (event) => {
         if (isCleaningUp) return;
-        
+
         // update last message time
         lastMessageTime = Date.now();
-        
+
         try {
           const data = JSON.parse(event.data);
-          
+
           // handle heartbeat messages
-          if (data.type === 'heartbeat') {
+          if (data.type === "heartbeat") {
             // respond with pong
-            sendRaw(JSON.stringify({
-              type: 'pong',
-              timestamp: data.timestamp
-            }));
+            sendRaw(
+              JSON.stringify({
+                type: "pong",
+                timestamp: data.timestamp,
+              })
+            );
             return;
           }
-          
+
           if (onMessage) onMessage(event);
         } catch (err) {
           console.error("Error processing message:", err);
@@ -221,44 +242,58 @@ export const setupWebSocketWithHeartbeat = (url, onOpen, onMessage, onError, onC
 
       socket.onerror = (event) => {
         if (isCleaningUp) return;
-        
+
         console.error("WebSocket error:", event);
         connectionState.isConnected = false;
-        
+
         if (connectionTimeout) {
           clearTimeout(connectionTimeout);
           connectionTimeout = null;
         }
-        
+
         if (onError) onError(event);
       };
 
       socket.onclose = (event) => {
         if (isCleaningUp) return;
-        
-        console.log(`WebSocket closed with code: ${event.code}, reason: ${event.reason || 'No reason provided'}, clean: ${event.wasClean}`);
+
+        console.log(
+          `WebSocket closed with code: ${event.code}, reason: ${
+            event.reason || "No reason provided"
+          }, clean: ${event.wasClean}`
+        );
         connectionState.isConnected = false;
         isConnecting = false;
-        
+
         if (connectionTimeout) {
           clearTimeout(connectionTimeout);
           connectionTimeout = null;
         }
-        
+
         // stop timers
         if (heartbeatTimer) clearInterval(heartbeatTimer);
         if (connectionMonitorTimer) clearInterval(connectionMonitorTimer);
-        
+
         if (onClose) onClose(event);
-        
+
         // handle reconnection
-        if (!event.wasClean && connectionState.reconnectAttempts < connectionState.maxReconnectAttempts) {
-          const backoff = connectionState.backoffMs * Math.pow(1.5, connectionState.reconnectAttempts);
-          console.log(`Scheduling reconnect in ${backoff}ms (attempt ${connectionState.reconnectAttempts + 1}/${connectionState.maxReconnectAttempts})`);
-          
+        if (
+          !event.wasClean &&
+          connectionState.reconnectAttempts <
+            connectionState.maxReconnectAttempts
+        ) {
+          const backoff =
+            connectionState.backoffMs *
+            Math.pow(1.5, connectionState.reconnectAttempts);
+          console.log(
+            `Scheduling reconnect in ${backoff}ms (attempt ${
+              connectionState.reconnectAttempts + 1
+            }/${connectionState.maxReconnectAttempts})`
+          );
+
           connectionState.reconnectAttempts++;
           if (reconnectTimer) clearTimeout(reconnectTimer);
-          
+
           const reconnectDelay = Math.max(2000, backoff);
           reconnectTimer = setTimeout(connect, reconnectDelay);
         }
@@ -266,15 +301,20 @@ export const setupWebSocketWithHeartbeat = (url, onOpen, onMessage, onError, onC
     } catch (error) {
       console.error("Error creating WebSocket:", error);
       isConnecting = false;
-      
+
       if (connectionTimeout) {
         clearTimeout(connectionTimeout);
         connectionTimeout = null;
       }
-      
+
       // schedule reconnect if allowed
-      if (!isCleaningUp && connectionState.reconnectAttempts < connectionState.maxReconnectAttempts) {
-        console.log(`Error creating socket, scheduling reconnect in ${connectionState.backoffMs}ms`);
+      if (
+        !isCleaningUp &&
+        connectionState.reconnectAttempts < connectionState.maxReconnectAttempts
+      ) {
+        console.log(
+          `Error creating socket, scheduling reconnect in ${connectionState.backoffMs}ms`
+        );
         reconnectTimer = setTimeout(connect, connectionState.backoffMs);
       }
     }
@@ -297,16 +337,16 @@ export const setupWebSocketWithHeartbeat = (url, onOpen, onMessage, onError, onC
     }
     return false;
   };
-  
+
   /**
    * process queued messages
    */
   const processQueue = () => {
     if (isCleaningUp) return;
-    
+
     if (messageQueue.length > 0) {
       console.log(`Processing message queue (${messageQueue.length} items)`);
-      
+
       while (messageQueue.length > 0) {
         const msg = messageQueue.shift();
         if (!sendRaw(msg)) {
@@ -314,9 +354,14 @@ export const setupWebSocketWithHeartbeat = (url, onOpen, onMessage, onError, onC
           break;
         }
       }
-      
+
       // if still has messages and connected, try again
-      if (!isCleaningUp && messageQueue.length > 0 && socket && socket.readyState === WebSocket.OPEN) {
+      if (
+        !isCleaningUp &&
+        messageQueue.length > 0 &&
+        socket &&
+        socket.readyState === WebSocket.OPEN
+      ) {
         setTimeout(processQueue, 500);
       }
     }
@@ -329,15 +374,18 @@ export const setupWebSocketWithHeartbeat = (url, onOpen, onMessage, onError, onC
    */
   const sendMessage = (message) => {
     if (isCleaningUp) return false;
-    
+
     if (socket && socket.readyState === WebSocket.OPEN) {
       return sendRaw(message);
     } else {
       console.log("Connection not ready, queueing message");
       messageQueue.push(message);
-      
+
       // try to connect if not connecting
-      if (!isConnecting && (!socket || socket.readyState === WebSocket.CLOSED)) {
+      if (
+        !isConnecting &&
+        (!socket || socket.readyState === WebSocket.CLOSED)
+      ) {
         connect();
       }
       return false;
@@ -355,11 +403,13 @@ export const setupWebSocketWithHeartbeat = (url, onOpen, onMessage, onError, onC
       ...connectionState,
       readyState: socket ? socket.readyState : -1,
       queueLength: messageQueue.length,
-      lastMessageReceived: lastMessageTime ? new Date(lastMessageTime).toISOString() : null
+      lastMessageReceived: lastMessageTime
+        ? new Date(lastMessageTime).toISOString()
+        : null,
     }),
     reconnect: () => {
       if (isCleaningUp) return;
-      
+
       if (socket) {
         const tempSocket = socket;
         socket = null; // clear reference first
@@ -370,19 +420,19 @@ export const setupWebSocketWithHeartbeat = (url, onOpen, onMessage, onError, onC
     cleanup: () => {
       console.log("Cleaning up WebSocket connection");
       isCleaningUp = true;
-      
+
       // clear all timers at once
       clearAllTimers();
-      
+
       // clear queue
       messageQueue = [];
-      
+
       // close socket
       if (socket) {
         const currentSocket = socket;
         socket = null;
         safeCloseSocket(currentSocket, 1000, "Normal closure");
       }
-    }
+    },
   };
 };

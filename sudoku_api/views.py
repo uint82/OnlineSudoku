@@ -8,6 +8,7 @@ from django.conf import settings
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import json
+import secrets  
 
 from .models import Game, Player, Move
 from .serializers import GameSerializer, PlayerSerializer, MoveSerializer, GameInfoSerializer
@@ -35,6 +36,7 @@ class GameViewSet(viewsets.ModelViewSet):
     def create(self, request):
         # get difficulty from request data or default to medium
         difficulty = request.data.get('difficulty', 'medium')
+        room_name = request.data.get('room_name', '')
         
         # generate new Sudoku puzzle
         sudoku_data = generate_sudoku(difficulty)
@@ -44,24 +46,30 @@ class GameViewSet(viewsets.ModelViewSet):
             initial_board=sudoku_data['puzzle'],
             current_board=sudoku_data['puzzle'],
             solution=sudoku_data['solution'],
-            difficulty=difficulty
+            difficulty=difficulty,
+            room_name=room_name
         )
         
         # create the host player
         player_name = request.data.get('player_name', 'Host')
         player_color = request.data.get('player_color', '#3498db')
         
+        # Generate token for authentication
+        token = secrets.token_hex(32)
+        
         player = Player.objects.create(
             game=game,
             name=player_name,
             color=player_color,
-            is_host=True
+            is_host=True,
+            token=token
         )
         
         # return game data with player info
         serializer = self.get_serializer(game)
         response_data = serializer.data
         response_data['player_id'] = str(player.id)
+        response_data['token'] = token  # include token in response
         
         return Response(response_data, status=status.HTTP_201_CREATED)
     
@@ -78,17 +86,42 @@ class GameViewSet(viewsets.ModelViewSet):
         
         player_name = request.data.get('player_name', 'Guest')
         player_color = request.data.get('player_color', '#e74c3c')
+        player_token = request.data.get('token')
         
+        # Cek apakah ada pemain dengan nama yang sama di game ini
+        existing_player = Player.objects.filter(game=game, name=player_name).first()
+        
+        if existing_player:
+            # Jika ada token dan sesuai, kembalikan info pemain yang ada
+            if player_token and existing_player.token == player_token:
+                serializer = GameSerializer(game)
+                response_data = serializer.data
+                response_data['player_id'] = str(existing_player.id)
+                response_data['token'] = existing_player.token
+                return Response(response_data)
+            else:
+                # Username sudah dipakai dan token tidak sesuai
+                return Response(
+                    {'error': f'Username "{player_name}" already in use in this game. Try a different name.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Generate token untuk pemain baru
+        token = secrets.token_hex(32)
+        
+        # Buat pemain baru
         player = Player.objects.create(
             game=game,
             name=player_name,
             color=player_color,
-            is_host=False
+            is_host=False,
+            token=token
         )
         
         serializer = GameSerializer(game)
         response_data = serializer.data
         response_data['player_id'] = str(player.id)
+        response_data['token'] = token  # Sertakan token dalam response
 
         # send the complete player list
         self.notify_player_list_update(game.id)
@@ -132,7 +165,8 @@ class GameViewSet(viewsets.ModelViewSet):
                 'difficulty': game.difficulty,
                 'player_count': game.players.count(),
                 'created_at': game.created_at,
-                'is_complete': game.is_complete  # menambahkan status is_complete agar frontend bisa memfilter
+                'is_complete': game.is_complete,
+                'room_name': game.room_name  # tambahkan room_name ke response
             })
             
         return Response(games_data)
@@ -297,6 +331,90 @@ class GameViewSet(viewsets.ModelViewSet):
                 {'error': 'Error providing hint'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    @action(detail=False, methods=['get'])
+    def find_by_room_name(self, request):
+        """
+        Find a game by room name
+        """
+        room_name = request.query_params.get('room_name', '').strip()
+        if not room_name:
+            return Response(
+                {'error': 'Room name is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # cari game dengan room name yang sesuai dan masih aktif 
+        games = Game.objects.filter(
+            room_name__iexact=room_name,  # case insensitive search 
+            is_active=True,
+            is_complete=False
+        ).order_by('-created_at')
+        
+        if not games.exists():
+            return Response(
+                {'error': f'No active games found with room name "{room_name}"'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        # gunakan game terbaru jika ada beberapa dengan nama yang sama
+        game = games.first()
+        serializer = GameInfoSerializer(game)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def find_player(self, request):
+        """
+        Temukan player berdasarkan username
+        """
+        username = request.query_params.get('username', '').strip()
+        token = request.query_params.get('token', '')
+        
+        if not username:
+            return Response(
+                {'error': 'Username is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # cari player dengan username ini (bisa ada beberapa di game berbeda)
+        players = Player.objects.filter(
+            name=username,
+            game__is_active=True,
+            game__is_complete=False
+        ).select_related('game').order_by('-game__created_at')
+        
+        if not players.exists():
+            return Response(
+                {'error': f'No active games found with username "{username}"'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        # jika token disediakan, coba verifikasi terlebih dahulu
+        if token:
+            matching_player = players.filter(token=token).first()
+            if matching_player:
+                # Token sesuai, kembalikan info game ini
+                game = matching_player.game
+                serializer = GameInfoSerializer(game)
+                response_data = serializer.data
+                response_data['player_id'] = str(matching_player.id)
+                response_data['token'] = matching_player.token
+                return Response(response_data)
+        
+        # jika tidak ada token atau tidak ada yang cocok, kembalikan daftar game
+        # tanpa token (user harus tahu token untuk bisa masuk)
+        games_data = []
+        for player in players:
+            games_data.append({
+                'id': player.game.id,
+                'host_name': player.game.players.filter(is_host=True).first().name if player.game.players.filter(is_host=True).exists() else "Unknown",
+                'difficulty': player.game.difficulty,
+                'player_count': player.game.players.count(),
+                'created_at': player.game.created_at,
+                'player_name': player.name
+            })
+            
+        return Response({'games': games_data})
 
 
 class MoveViewSet(viewsets.ModelViewSet):
