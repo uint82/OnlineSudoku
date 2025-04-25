@@ -772,13 +772,17 @@ const Board = ({
     setPencilMode(!pencilMode);
   };
 
-  const toggleQuickChat = (event) => {
-    if (event) {
-      // position the panel near the button
-      const buttonRect = event.currentTarget.getBoundingClientRect();
+  const toggleQuickChat = () => {
+    if (!showQuickChat) {
+      // Get viewport dimensions to center the panel
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      
+      // Set position to center of the screen
+      // We'll use fixed values here, and the CSS will handle the actual centering
       setQuickChatPosition({
-        x: buttonRect.left,
-        y: buttonRect.bottom + 10,
+        x: viewportWidth / 2,
+        y: viewportHeight / 2
       });
     }
     setShowQuickChat(!showQuickChat);
@@ -902,11 +906,12 @@ const Board = ({
 
     return (
       <div
-        className="quick-chat-panel"
+        className="quick-chat-panel centered"
         style={{
-          position: "absolute",
-          left: `${quickChatPosition.x}px`,
-          top: `${quickChatPosition.y}px`,
+          position: "fixed",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
           zIndex: 1001,
         }}
       >

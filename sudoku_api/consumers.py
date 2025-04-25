@@ -2,6 +2,8 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from .models import Game, Player, Move
+from channels.exceptions import StopConsumer
+from django.db import connections
 import asyncio
 import logging
 from django.utils import timezone
@@ -58,15 +60,27 @@ class SudokuConsumer(AsyncWebsocketConsumer):
             await self.close(code=4000)   
 
     async def disconnect(self, close_code):
-        # cancel heartbeat task
-        if self.heartbeat_task:
-            self.heartbeat_task.cancel()
-            
-        # leave room group
+        # First, make sure to discard from the group
         await self.channel_layer.group_discard(
             self.room_group_name,
             self.channel_name
         )
+        
+        # Then cancel the heartbeat task if it exists
+        if hasattr(self, 'heartbeat_task') and self.heartbeat_task:
+            self.heartbeat_task.cancel()
+            try:
+                # Wait for the task to be properly cancelled
+                await self.heartbeat_task
+            except asyncio.CancelledError:
+                # This is expected when cancelling a task
+                pass
+            except Exception as e:
+                logger.error(f"Error cancelling heartbeat task: {e}", exc_info=True)
+        
+        # Finally raise StopConsumer
+        await database_sync_to_async(connections.close_all)()
+        raise StopConsumer()
     
     async def send_heartbeat(self):
         """Send periodic heartbeat to keep connection alive"""
