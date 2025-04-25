@@ -2,6 +2,8 @@
 
 This project creates a multiplayer Sudoku game with Django backend and React frontend, allowing users to share their games via QR codes and links.
 
+livelink:
+
 ## Project Structure
 
 ```
