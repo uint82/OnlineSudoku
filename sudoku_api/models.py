@@ -64,7 +64,7 @@ class Game(models.Model):
 class Player(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     game = models.ForeignKey(Game, on_delete=models.CASCADE, related_name='players')
-    name = models.CharField(max_length=100, default="Anonymous")
+    name = models.CharField(max_length=14, default="Anonymous")
     color = models.CharField(max_length=7, default="#3498db")  # Hex color
     is_host = models.BooleanField(default=False)
     last_active = models.DateTimeField(auto_now=True)
