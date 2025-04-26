@@ -26,9 +26,9 @@ load_dotenv()
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG')
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
 
 
 # Application definition
@@ -68,9 +68,8 @@ MIDDLEWARE = [
 # Allow CORS from frontend
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # React development server
-    # Add your production domain here
+    "https://sudokusquad.netlify.app/",
 ]
-
 # Channels configuration
 ASGI_APPLICATION = "backend.asgi.application"
 CHANNEL_LAYERS = {
@@ -80,7 +79,7 @@ CHANNEL_LAYERS = {
 }
 
 # Frontend URL for QR code generation
-FRONTEND_URL = "http://localhost:3000"  # Change in production
+FRONTEND_URL = os.environ.get('FRONTEND_URL')  # Change in production
 
 ROOT_URLCONF = 'backend.urls'
 
