@@ -15,10 +15,8 @@ A real-time collaborative Sudoku web application where up to 10 players can work
 
 ## 📷 Screenshots
 
-![Game Board](https://via.placeholder.com/600x400?text=Game+Board+Screenshot)
+![a](https://github.com/user-attachments/assets/8e7eac63-1b9a-430c-b693-e8f473ee1283)
 *The main game board with real-time player collaboration*
-
-![Player Chat](https://via.placeholder.com/600x400?text=Player+Chat+Screenshot)
 *Real-time chat feature for player communication*
 
 ## 🎯 How to Play
@@ -69,7 +67,7 @@ A real-time collaborative Sudoku web application where up to 10 players can work
 
 1. Clone the repository
    ```bash
-   git clone https://github.com/yourusername/sudoku-multiplayer.git
+   git clone https://github.com/uint82/sudoku-multiplayer.git
    cd sudoku-multiplayer
    ```
 
@@ -221,4 +219,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-Made with ❤️ by [Your Name]
+Made with ❤️ by [uint82]
