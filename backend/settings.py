@@ -68,6 +68,7 @@ MIDDLEWARE = [
 # Allow CORS from frontend
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # React development server
+    "https://soduokusquad.netlify.app/",
     
 ]
 # Channels configuration
