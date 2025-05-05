@@ -93,7 +93,6 @@ const Game = ({
           setPlayerName(savedPlayerName);
         }
       }
-      
     }
 
     // pastikan URL menggunakan format /game/:gameId
@@ -148,10 +147,6 @@ const Game = ({
       const isComplete = isBoardComplete(game.current_board);
 
       if (isComplete && !showCongratulations) {
-        console.log(
-          "Game completed! Showing congratulations and notifying others."
-        );
-
         // show congratulations popup locally
         setShowCongratulations(true);
 
@@ -194,7 +189,6 @@ const Game = ({
       socketState.reconnect
     ) {
       const reconnectTimer = setTimeout(() => {
-        console.log("Attempting to reconnect...");
         socketState.reconnect();
       }, 2000); // reconnect after 2 seconds
 
@@ -206,11 +200,9 @@ const Game = ({
     if (socket && socket.readyState === WebSocket.OPEN) {
       const handleWebSocketMessage = (event) => {
         const data = JSON.parse(event.data);
-        console.log("WebSocket message received in Game:", data);
 
         // handle specific message types if needed
         if (data.type === "quick_chat") {
-          console.log("Quick chat message received:", data);
           // pass to board component via props
         }
       };
@@ -234,12 +226,6 @@ const Game = ({
             const { row, column, player_id, player, focus_type } = message;
             const cellKey = `${row}-${column}`;
 
-            console.log(
-              "FOCUS DEBUG: Received focus event in specific handler:",
-              message
-            );
-            console.log("FOCUS DEBUG: Current cellFocus state:", cellFocus);
-
             setCellFocus((prev) => {
               // for 'focus' events, add or update the focus information
               if (focus_type === "focus") {
@@ -255,7 +241,6 @@ const Game = ({
                   playerName: player?.name || "Player",
                 };
 
-                console.log("FOCUS DEBUG: Updated state will be:", newState);
                 return newState;
               }
               // for 'blur' events, remove the focus information
@@ -268,7 +253,6 @@ const Game = ({
                   newState[cellKey].player_id === player_id
                 ) {
                   delete newState[cellKey];
-                  console.log("FOCUS DEBUG: Deleting focus for cell:", cellKey);
                 }
 
                 return newState;
@@ -278,7 +262,7 @@ const Game = ({
             });
           }
         } catch (error) {
-          console.error("Error processing socket message:", error);
+          // Handle error silently in production
         }
       };
 
@@ -300,7 +284,6 @@ const Game = ({
       setGame(response.data);
       setLoading(false);
     } catch (error) {
-      console.error("Error fetching game:", error);
       setError("Game not found or has expired");
       setLoading(false);
     }
@@ -377,8 +360,6 @@ const Game = ({
         navigate(`/game/${gameId}`, { replace: true });
       }
     } catch (error) {
-      console.error("Error joining game:", error);
-
       // cek apakah error karena username sudah digunakan
       if (
         error.response &&
@@ -420,7 +401,6 @@ const Game = ({
       setConnectionStatus("connected");
       setTimeout(() => {
         if (socket && socket.readyState === WebSocket.OPEN) {
-          console.log("Announcing player join:", playerId);
           socket.send(
             JSON.stringify({
               type: "join",
@@ -443,8 +423,6 @@ const Game = ({
 
       // skip heartbeat messages as they're handled in the utility
       if (data.type === "heartbeat") return;
-
-      console.log("WebSocket message received:", data); // For debugging
 
       if (data.type === "move") {
         // update board with new move
@@ -472,7 +450,6 @@ const Game = ({
         setErrorMessage(data.message);
         setTimeout(() => setErrorMessage(null), 3000);
       } else if (data.type === "quick_chat") {
-        console.log("RECEIVED QUICK CHAT:", data); // debug
         setChatMessages((prev) => {
           // check if this message is already in our list to avoid duplicates
           const isDuplicate = prev.some(
@@ -483,7 +460,6 @@ const Game = ({
           );
 
           if (!isDuplicate) {
-            console.log("Adding quick chat message to state:", data);
             return [...prev, data];
           }
           return prev;
@@ -491,8 +467,6 @@ const Game = ({
       } else if (data.type === "cell_focus") {
         const { row, column, player_id, player, focus_type } = data;
         const cellKey = `${row}-${column}`;
-
-        console.log("Received cell_focus in main handler:", data);
 
         setCellFocus((prev) => {
           const newState = { ...prev };
@@ -539,12 +513,10 @@ const Game = ({
     };
 
     const onError = (e) => {
-      console.error("WebSocket error:", e);
       setConnectionStatus("error");
     };
 
     const onClose = (e) => {
-      console.log("WebSocket disconnected", e.reason);
       setConnectionStatus("disconnected");
     };
 
@@ -620,14 +592,9 @@ const Game = ({
         players: [...prevGame.players, player],
       };
     });
-
-    // log player join for debugging
-    console.log(`Player joined: ${player.name}`);
   };
 
   const updatePlayerList = (players) => {
-    console.log("Updating player list with:", players);
-
     // use a more reliable state update approach
     setGame((prevGame) => {
       if (!prevGame) return null;
@@ -639,7 +606,6 @@ const Game = ({
       const newPlayers = JSON.stringify(players.map((p) => p.id).sort());
 
       if (currentPlayers !== newPlayers) {
-        console.log("Player list changed, updating state");
         return {
           ...prevGame,
           players: players,
@@ -733,7 +699,6 @@ const Game = ({
       socketState.isReady &&
       socketState.isReady()
     ) {
-      console.log("Broadcasting quick chat via main socket:", message);
       const chatMessage = {
         type: "quick_chat",
         player_id: playerId,
@@ -745,10 +710,6 @@ const Game = ({
       // add to local chatMessages state for immediate feedback
       setChatMessages((prev) => [...prev, chatMessage]);
     } else {
-      console.log(
-        "Primary socket not ready, trying socketState sendMessage..."
-      );
-
       // fall back to socketState's sendMessage function if available
       if (socketState && socketState.sendMessage) {
         const chatMessage = {
@@ -761,12 +722,9 @@ const Game = ({
         const success = socketState.sendMessage(JSON.stringify(chatMessage));
 
         if (success) {
-          console.log("Message sent via socketState.sendMessage");
           // add to local state for immediate feedback
           setChatMessages((prev) => [...prev, chatMessage]);
         } else {
-          console.error("Failed to send message via socketState.sendMessage");
-
           // add to local state to provide user feedback
           setChatMessages((prev) => [...prev, chatMessage]);
 
@@ -777,7 +735,6 @@ const Game = ({
           setTimeout(() => setErrorMessage(null), 3000);
         }
       } else {
-        console.error("No working socket available for sending messages");
         setErrorMessage("Cannot send messages - connection lost");
         setTimeout(() => setErrorMessage(null), 3000);
       }

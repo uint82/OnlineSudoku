@@ -42,22 +42,6 @@ const Board = ({
   };
 
   useEffect(() => {
-    console.log("Chat messages received in Board:", chatMessages);
-  }, [chatMessages]);
-
-  useEffect(() => {
-    console.log("Current cellFocus state in Board:", cellFocus);
-
-    // debug log untuk setiap sel yang memiliki fokus
-    Object.keys(cellFocus || {}).forEach((key) => {
-      const focus = cellFocus[key];
-      console.log(
-        `FOCUS DEBUG: Sel ${key} difokuskan oleh pemain ${
-          focus.playerName || focus.player?.name || "Unnamed"
-        }`
-      );
-    });
-
     // kika kita memiliki sel yang dipilih, pastikan fokus kita tetap terdaftar di state
     if (selectedCell) {
       const cellKey = `${selectedCell.row}-${selectedCell.col}`;
@@ -146,11 +130,6 @@ const Board = ({
       .map(([id]) => id);
 
     if (playersWithMultipleFoci.length > 0) {
-      console.log(
-        "Found players with multiple foci, cleaning up:",
-        playersWithMultipleFoci
-      );
-
       setCellFocus((prev) => {
         // untuk setiap pemain dengan fokus ganda, pertahankan hanya fokus terbaru
         const newState = { ...prev };
@@ -189,24 +168,20 @@ const Board = ({
       if (move.is_hint === true) {
         const cellKey = `${move.row}-${move.column}`;
         hintCells[cellKey] = true;
-        console.log(`Detected hint cell at ${cellKey} from is_hint flag`);
         return;
       }
 
-      
       const cellKey = `${move.row}-${move.column}`;
       const hintKey = `game_${gameId}_hint_cell_${cellKey}`;
 
       if (localStorage.getItem(hintKey) === "true") {
         hintCells[cellKey] = true;
-        console.log(`Detected hint cell at ${cellKey} from localStorage`);
         return;
       }
 
       // simpan sel hint yang baru ditemukan untuk persistensi
       if (move.is_hint === true) {
         localStorage.setItem(hintKey, "true");
-        console.log(`Saved hint cell at ${cellKey} to localStorage`);
       }
     });
 
@@ -283,10 +258,6 @@ const Board = ({
 
       // skip adding messages from the current player (they'll be added directly in sendQuickChatMessage)
       if (latestMessage && latestMessage.player_id !== playerId) {
-        console.log(
-          "Adding chat message to temporary messages:",
-          latestMessage
-        );
         addTemporaryMessage(latestMessage);
       }
     }
@@ -462,11 +433,6 @@ const Board = ({
       return;
     }
 
-    // don't log periodic refreshes to reduce console spam
-    if (!isRefresh) {
-      console.log(`Sending focus event for cell ${row}-${col}`);
-    }
-
     // find current player to include complete player info
     const currentPlayer = players.find((p) => p.id === playerId);
     if (!currentPlayer) return;
@@ -552,8 +518,6 @@ const Board = ({
     if (!existingFocus || existingFocus.player_id !== playerId) {
       return;
     }
-
-    console.log(`Sending blur event for cell ${row}-${col}`);
 
     // send blur event through WebSocket
     if (socketState && socketState.isReady && socketState.isReady()) {
@@ -714,7 +678,6 @@ const Board = ({
     try {
       // try WebSocket approach first
       if (socketState && socketState.isReady && socketState.isReady()) {
-        console.log("Requesting hint via WebSocket");
         socketState.sendMessage(
           JSON.stringify({
             type: "request_hint",
@@ -727,7 +690,6 @@ const Board = ({
       }
       // fall back to REST API if WebSocket isn't available
       else {
-        console.log("Requesting hint via REST API");
         const response = await fetch(
           `http://localhost:8000/api/games/${gameId}/get_hint/`,
           {
@@ -750,7 +712,6 @@ const Board = ({
         }
 
         const data = await response.json();
-        console.log("Hint received from REST API:", data.value);
         // move will be broadcast via WebSocket or handled by the game state
       }
 
@@ -821,8 +782,6 @@ const Board = ({
   };
 
   const addTemporaryMessage = (message) => {
-    console.log("Adding temporary message:", message);
-
     // add new message with unique ID
     const messageWithId = {
       ...message,

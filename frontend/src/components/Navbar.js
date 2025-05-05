@@ -99,7 +99,7 @@ const Navbar = ({
           fontSize: "1.25rem",
         }}
       >
-        <span>Sudoku Multiplayer</span>
+        <span>Sudoku Squad</span>
       </div>
 
       {/* Right side - User menu */}

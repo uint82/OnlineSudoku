@@ -133,7 +133,7 @@ class GameViewSet(viewsets.ModelViewSet):
         game = self.get_object()
         
         # create the share URL
-        share_url = f"{settings.FRONTEND_URL}/join/{game.id}"
+        share_url = f"{settings.FRONTEND_URL.rstrip('/')}/join/{game.id}"
         
         # generate QR code using utility function
         qr_code_base64 = generate_qr_code(share_url)

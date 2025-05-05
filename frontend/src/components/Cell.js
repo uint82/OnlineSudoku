@@ -24,13 +24,6 @@ const Cell = ({
   const cellRef = useRef(null);
   const isLocked = isInitial || isCorrect;
 
-  // for debugging
-  useEffect(() => {
-    if (focusInfo) {
-      console.log(`Cell ${row}-${col} has focus from player:`, focusInfo);
-    }
-  }, [focusInfo, row, col]);
-
   const handleCellFocus = () => {
     if (onFocus) onFocus();
   };
