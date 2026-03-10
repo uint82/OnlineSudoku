@@ -39,21 +39,6 @@ Real-time chat feature for player communication
    - The system validates entries in real-time  
    - Celebrate your collective victory when the puzzle is solved  
 
-## Tech Stack
-
-### Backend
-- Django: Web framework for building the application
-- Django REST Framework: For creating RESTful APIs
-- Django Channels: For WebSocket support and real-time features
-- Daphne: ASGI server for handling WebSocket connections
-- PostgreSQL: Database for storing game states and user data
-
-### Frontend
-- React: JavaScript library for building the user interface
-- WebSockets: For real-time communication between clients and server
-- CSS3: For styling components
-- JavaScript (ES6+): For frontend logic and interactions
-
 ## Installation and Setup
 
 ### Prerequisites
